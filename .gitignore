@@ -1,0 +1,23 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / tooling
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+.aider*
+.continue/
+
+# Claude Code working files (local-only)
+.claude/
+
+# Local dev artifacts
+node_modules/
+.env
+.env.local
+.env.*.local
+*.log
+.vercel

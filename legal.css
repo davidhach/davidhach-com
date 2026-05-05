@@ -1,0 +1,99 @@
+/* Legal pages — Privacy, Imprint. Inherits brand tokens from styles.css. */
+
+body { background: var(--bg); }
+
+.legal {
+  min-height: 100dvh;
+  padding: 48px 24px 64px;
+  display: flex;
+  justify-content: center;
+}
+
+.legal article {
+  width: 100%;
+  max-width: 680px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.legal-back {
+  margin: 0 0 32px;
+  font-size: 13px;
+}
+.legal-back a {
+  color: var(--text-2);
+  text-decoration: none;
+  transition: color 160ms var(--ease);
+}
+.legal-back a:hover { color: var(--text); }
+
+.legal h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(32px, 4.5vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+
+.legal-meta {
+  font-size: 13px;
+  color: var(--text-3);
+  margin: 0 0 32px;
+}
+
+.legal h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  margin: 36px 0 12px;
+  color: var(--text);
+}
+
+.legal h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 22px 0 8px;
+  color: var(--text);
+}
+
+.legal p, .legal ul {
+  margin: 0 0 14px;
+  color: var(--text);
+}
+
+.legal ul {
+  padding-left: 20px;
+}
+.legal li {
+  margin-bottom: 6px;
+}
+
+.legal a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color 160ms var(--ease);
+}
+.legal a:hover { color: var(--text-2); }
+
+.legal code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.placeholder {
+  color: var(--text-3);
+  font-style: italic;
+}

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
+
+  <title>David Hach — Designer & Builder</title>
+  <meta name="description" content="David Hach. Designer building products with AI. Latest video, newsletter, and links." />
+  <link rel="canonical" href="https://davidhach.com/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://davidhach.com/" />
+  <meta property="og:title" content="David Hach" />
+  <meta property="og:description" content="Designer building products with AI. From idea to ship." />
+  <meta property="og:image" content="https://davidhach.com/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:creator" content="@david_hach" />
+
+  <!-- Favicon: amber dot on near-black -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0A0A'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23FF6A1A'/%3E%3C/svg%3E" />
+  <link rel="alternate icon" href="/favicon.svg" />
+
+  <!-- Self-hosted fonts (declared in styles.css) — no third-party requests -->
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin-400-normal.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-sans-latin-600-normal.woff2" crossorigin />
+
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- Theme hydration: runs before paint to avoid FOUC -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("dh_theme");
+        var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+        var theme = stored === "light" || stored === "dark"
+          ? stored
+          : (prefersLight ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+</head>
+<body>
+  <a href="#main" class="skip-nav">Skip to content</a>
+
+  <main id="main" class="page">
+    <div class="stack">
+
+      <!-- Top utility: header tagline + theme toggle -->
+      <header class="topbar">
+        <p class="tagline">Building epic things with epic people.</p>
+        <button
+          type="button"
+          id="theme-toggle"
+          class="theme-toggle"
+          aria-label="Toggle color theme"
+          title="Toggle theme"
+        >
+          <!-- Sun (visible in dark mode → click to go light) -->
+          <svg class="icon icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+          </svg>
+          <!-- Moon (visible in light mode → click to go dark) -->
+          <svg class="icon icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z" />
+          </svg>
+        </button>
+      </header>
+
+      <!-- Latest Video -->
+      <a class="card card--video" id="latest-video" href="https://www.youtube.com/@david_hach" target="_blank" rel="noopener" data-state="loading">
+        <h2 class="card-heading">Latest Video</h2>
+        <p class="card-meta" data-meta>YouTube &nbsp;|&nbsp; @david_hach</p>
+        <div class="card-row">
+          <div class="thumb" data-thumb aria-hidden="true">
+            <!-- Placeholder; replaced by real YouTube thumbnail when API resolves -->
+            <svg viewBox="0 0 160 90" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="thumb-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="var(--thumb-stop-1, #1F1F1F)"/>
+                  <stop offset="100%" stop-color="var(--thumb-stop-2, #0A0A0A)"/>
+                </linearGradient>
+              </defs>
+              <rect width="160" height="90" fill="url(#thumb-grad)"/>
+              <circle cx="80" cy="45" r="18" fill="#FF6A1A"/>
+              <path d="M74 36 L92 45 L74 54 Z" fill="#0A0A0A"/>
+            </svg>
+          </div>
+          <p class="card-title" data-title>New builds, breakdowns, and lessons from shipping products with AI.</p>
+        </div>
+        <span class="card-arrow" aria-hidden="true">↗</span>
+      </a>
+
+      <!-- Primary CTA -->
+      <a class="btn-primary" href="https://youtube.com/@david_hach?sub_confirmation=1" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/>
+        </svg>
+        <span>Subscribe @david_hach</span>
+      </a>
+
+      <!-- Newsletter -->
+      <section class="card card--lab" aria-labelledby="lab-title">
+        <p id="lab-title" class="lab-title">Tap into my brain</p>
+        <p class="lab-sub">Value only, promised.</p>
+        <form class="lab-form" id="newsletter" novalidate>
+          <label class="visually-hidden" for="email">Email address</label>
+          <input
+            id="email"
+            class="lab-input"
+            name="email"
+            type="email"
+            inputmode="email"
+            autocomplete="email"
+            placeholder="your@email.com"
+            required
+          />
+          <button class="lab-submit" type="submit" aria-label="Subscribe">
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+              <path d="M3 10h13M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </form>
+        <label class="lab-consent">
+          <input type="checkbox" name="consent" required />
+          <span>
+            I agree to receive the newsletter at the email I provide. I can unsubscribe anytime — see the
+            <a href="/privacy">privacy notice</a>.
+          </span>
+        </label>
+        <p class="lab-status" data-status hidden></p>
+      </section>
+
+      <!-- Socials -->
+      <nav class="socials" aria-label="Social profiles">
+        <a class="social" href="https://www.youtube.com/@david_hach" target="_blank" rel="noopener" aria-label="YouTube">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/>
+          </svg>
+        </a>
+        <a class="social" href="https://www.instagram.com/david_hach/" target="_blank" rel="noopener" aria-label="Instagram">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069ZM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z"/>
+          </svg>
+        </a>
+      </nav>
+
+      <footer class="footer">
+        <p class="footer-legal">
+          <a href="/imprint">Imprint</a>
+          <span aria-hidden="true">·</span>
+          <a href="/privacy">Privacy</a>
+        </p>
+        <p>David Hach &nbsp;|&nbsp; All Rights Reserved</p>
+      </footer>
+    </div>
+  </main>
+
+  <script src="./script.js" defer></script>
+</body>
+</html>

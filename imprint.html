@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
+
+  <title>Imprint — David Hach</title>
+  <meta name="description" content="Imprint / contact information for davidhach.com." />
+  <meta name="robots" content="noindex" />
+  <link rel="canonical" href="https://davidhach.com/imprint" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0A0A'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23FF6A1A'/%3E%3C/svg%3E" />
+
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin-400-normal.woff2" crossorigin />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./legal.css" />
+
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("dh_theme");
+        var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+        var theme = stored === "light" || stored === "dark" ? stored : (prefersLight ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) { document.documentElement.setAttribute("data-theme", "dark"); }
+    })();
+  </script>
+</head>
+<body>
+  <main class="legal">
+    <article>
+      <p class="legal-back"><a href="/">← back to davidhach.com</a></p>
+      <h1>Imprint</h1>
+      <p class="legal-meta">Information per § 5 TMG / Art. 14 EU Consumer Rights Directive</p>
+
+      <h2>Operator</h2>
+      <p>
+        David Hach<br />
+        Großsorheimer Weg 3a<br />
+        86753 Möttingen<br />
+        Germany
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Email: <a href="mailto:david@davidhach.com">david@davidhach.com</a>
+      </p>
+
+      <h2>Responsible for content</h2>
+      <p>David Hach (address as above)</p>
+
+      <h2>Disclaimer</h2>
+      <p>This site is a personal project. Content reflects the author's views. External links are provided as references; the author has no control over the content of linked third-party sites and accepts no liability for them.</p>
+
+      <h2>EU dispute resolution</h2>
+      <p>The European Commission provides a platform for online dispute resolution: <a href="https://ec.europa.eu/consumers/odr" target="_blank" rel="noopener">ec.europa.eu/consumers/odr</a>. I am not obliged and not willing to participate in dispute-resolution proceedings before a consumer arbitration board.</p>
+    </article>
+  </main>
+</body>
+</html>

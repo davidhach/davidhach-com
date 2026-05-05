@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
+
+  <title>Privacy — David Hach</title>
+  <meta name="description" content="How davidhach.com handles personal data." />
+  <meta name="robots" content="noindex" />
+  <link rel="canonical" href="https://davidhach.com/privacy" />
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230A0A0A'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23FF6A1A'/%3E%3C/svg%3E" />
+
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin-400-normal.woff2" crossorigin />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./legal.css" />
+
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("dh_theme");
+        var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+        var theme = stored === "light" || stored === "dark" ? stored : (prefersLight ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (_) { document.documentElement.setAttribute("data-theme", "dark"); }
+    })();
+  </script>
+</head>
+<body>
+  <main class="legal">
+    <article>
+      <p class="legal-back"><a href="/">← back to davidhach.com</a></p>
+      <h1>Privacy notice</h1>
+      <p class="legal-meta">Last updated: 5 May 2026</p>
+
+      <p>This page explains how I handle personal data on davidhach.com. The site is run as a personal project, not a business. I keep the data flow as small as possible.</p>
+
+      <h2>1. Controller</h2>
+      <p>The controller responsible for data on this site is David Hach. For contact details, see the <a href="/imprint">Imprint</a>.</p>
+
+      <h2>2. What's collected, when</h2>
+      <h3>Visiting the site</h3>
+      <p>Vercel (the hosting provider) processes standard server log data when you load the site: IP address, user-agent, referrer, and the requested URL. This is needed to deliver the page and to protect the service against abuse. Logs are retained for a short, automatically-rotated period and not used for analytics or tracking.</p>
+      <p>The site uses no analytics, no advertising trackers, no fingerprinting, and no third-party social embeds. Fonts are served from this domain — no request is made to Google Fonts. YouTube thumbnails are proxied through this domain — no request is made to Google / YouTube CDNs from your browser when you view the homepage.</p>
+
+      <h3>Newsletter ("Tap into my brain")</h3>
+      <p>If you subscribe, the email address you submit is sent to my email service provider <strong>Kit (Kit Inc., USA — formerly ConvertKit)</strong>, which stores it for the purpose of sending you the newsletter. Your browser does not contact Kit directly; the request is proxied through this domain.</p>
+      <p>Kit operates a confirmation-email flow ("double opt-in"): you receive an email and must click a link before being added to the list. If you don't confirm, the address is discarded.</p>
+      <ul>
+        <li><strong>Legal basis:</strong> your explicit consent (Art. 6(1)(a) GDPR), captured by the checkbox on the form.</li>
+        <li><strong>Purpose:</strong> sending you the newsletter you signed up for.</li>
+        <li><strong>Retention:</strong> until you unsubscribe (every newsletter contains a one-click unsubscribe link).</li>
+        <li><strong>International transfer:</strong> Kit is based in the United States. The transfer is supported by the EU–US Data Privacy Framework and Standard Contractual Clauses where applicable. See <a href="https://kit.com/privacy" target="_blank" rel="noopener">Kit's privacy policy</a>.</li>
+      </ul>
+
+      <h3>Theme preference</h3>
+      <p>Your light/dark mode choice is stored in your browser's <code>localStorage</code> under the key <code>dh_theme</code>. This is a strictly-functional storage entry — no information leaves your browser. You can clear it any time in your browser settings.</p>
+
+      <h2>3. Cookies</h2>
+      <p>This site does not set any cookies. The only client-side persistence is the theme preference described above.</p>
+
+      <h2>4. Your rights</h2>
+      <p>Under the GDPR you have the right to: access, rectify, erase, and port your data; restrict or object to processing; withdraw consent at any time without affecting the lawfulness of past processing; and lodge a complaint with a supervisory authority.</p>
+      <p>To exercise any of these rights, contact me using the address in the <a href="/imprint">Imprint</a>. To unsubscribe from the newsletter, click the unsubscribe link in any email — that revokes consent immediately.</p>
+
+      <h2>5. Service providers used</h2>
+      <ul>
+        <li><strong>Vercel Inc.</strong> — hosting, edge caching, serverless functions. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Vercel privacy policy</a>.</li>
+        <li><strong>Kit Inc.</strong> — newsletter delivery (only after you opt in). <a href="https://kit.com/privacy" target="_blank" rel="noopener">Kit privacy policy</a>.</li>
+        <li><strong>YouTube / Google LLC</strong> — when you click "Latest Video", your browser navigates to YouTube. From that point on, YouTube's privacy policy applies. The thumbnail you see on this page is fetched server-side, so Google does not see your IP until you actually click through.</li>
+      </ul>
+
+      <h2>6. Changes</h2>
+      <p>This notice may be updated as the site evolves. Material changes will be reflected in the "last updated" date at the top.</p>
+    </article>
+  </main>
+</body>
+</html>
