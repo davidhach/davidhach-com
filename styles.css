@@ -238,7 +238,7 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 32px 20px 32px;
+  padding: 20px 18px 24px;
 }
 
 @media (min-width: 720px) {
@@ -250,7 +250,11 @@ body {
   max-width: var(--container);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
+}
+
+@media (min-width: 720px) {
+  .stack { gap: 12px; }
 }
 
 /* ── Top bar (tagline + theme toggle) ──────────────────── */
@@ -259,7 +263,7 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin: 4px 4px 8px;
+  margin: 0 4px 2px;
 }
 
 .tagline {
@@ -314,11 +318,14 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 20px;
+  padding: 16px;
   transition:
     background-color 200ms var(--ease),
     border-color 200ms var(--ease),
     transform 200ms var(--ease);
+}
+@media (min-width: 720px) {
+  .card { padding: 20px; }
 }
 
 .card:focus-visible {
@@ -338,27 +345,33 @@ body {
 }
 
 .card-heading {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.015em;
   color: var(--text);
 }
+@media (min-width: 720px) {
+  .card-heading { font-size: 24px; margin-bottom: 4px; }
+}
 
 .card-meta {
-  margin: 0 0 14px;
-  font-size: 13px;
-  line-height: 1.5;
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
   color: var(--text-3);
   letter-spacing: 0.01em;
+}
+@media (min-width: 720px) {
+  .card-meta { font-size: 13px; margin-bottom: 14px; }
 }
 
 .card-row {
   display: grid;
-  grid-template-columns: clamp(96px, 36%, 144px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: clamp(88px, 34%, 128px) minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
 }
 
@@ -380,15 +393,18 @@ body {
 .card-title {
   margin: 0;
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
   color: var(--text);
   letter-spacing: -0.005em;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+@media (min-width: 720px) {
+  .card-title { font-size: 15px; -webkit-line-clamp: 4; }
 }
 
 .card-arrow {
@@ -427,25 +443,34 @@ body {
 /* ── Newsletter ("Tap into my brain") ──────────────────── */
 .card--lab {
   background: var(--surface);
-  padding: 24px;
+  padding: 16px;
+}
+@media (min-width: 720px) {
+  .card--lab { padding: 24px; }
 }
 
 .lab-title {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-family: var(--font-display);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.015em;
   color: var(--text);
 }
+@media (min-width: 720px) {
+  .lab-title { font-size: 24px; margin-bottom: 4px; }
+}
 
 .lab-sub {
-  margin: 0 0 18px;
-  font-size: 15px;
-  line-height: 1.5;
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--text-2);
   max-width: 36ch;
+}
+@media (min-width: 720px) {
+  .lab-sub { font-size: 15px; margin-bottom: 18px; }
 }
 
 .lab-form {
@@ -465,7 +490,7 @@ body {
   background: transparent;
   border: 0;
   outline: 0;
-  padding: 14px 14px;
+  padding: 10px 12px;
   font-size: 15px;
   color: var(--text);
   min-width: 0;
@@ -476,8 +501,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-sm);
   color: var(--text);
   background: var(--surface-2);
@@ -491,12 +516,15 @@ body {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 10px;
-  margin: 12px 2px 0;
-  font-size: 12px;
-  line-height: 1.5;
+  margin: 10px 2px 0;
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--text-2);
   cursor: pointer;
   user-select: none;
+}
+@media (min-width: 720px) {
+  .lab-consent { font-size: 12px; line-height: 1.5; margin-top: 12px; }
 }
 .lab-consent input[type="checkbox"] {
   appearance: none;
@@ -548,11 +576,12 @@ body {
 .lab-consent a:hover { color: var(--text-2); }
 
 .lab-status {
-  margin: 10px 2px 0;
-  font-size: 13px;
+  margin: 8px 2px 0;
+  font-size: 12px;
   color: var(--text-2);
-  min-height: 1em;
+  min-height: 0;
 }
+.lab-status[hidden] { display: none; }
 .lab-status[data-state="success"] { color: var(--text); font-weight: 500; }
 [data-theme="dark"] .lab-status[data-state="success"] { color: var(--accent); }
 .lab-status[data-state="error"] { color: #DC2626; }
@@ -563,16 +592,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 12px 0 4px;
+  gap: 4px;
+  padding: 4px 0 0;
 }
 
 .social {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--r-pill);
   color: var(--text-2);
   background: transparent;
@@ -588,7 +617,7 @@ body {
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 16px 24px;
+  padding: 13px 24px;
   background: var(--cta-bg);
   color: var(--cta-fg);
   border-radius: var(--r-pill);
@@ -599,6 +628,9 @@ body {
   transition: background 160ms var(--ease), transform 160ms var(--ease);
   will-change: transform;
 }
+@media (min-width: 720px) {
+  .btn-primary { padding: 16px 24px; }
+}
 .btn-primary:hover { background: var(--cta-bg-hover); }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:focus-visible { outline: 2px solid var(--cta-focus-ring); outline-offset: 2px; }
@@ -606,21 +638,25 @@ body {
 /* ── Footer ────────────────────────────────────────────── */
 .footer {
   text-align: center;
-  margin-top: 12px;
-  padding: 8px 0;
+  margin-top: 4px;
+  padding: 4px 0 0;
 }
 .footer p {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--text-3);
+}
+@media (min-width: 720px) {
+  .footer { margin-top: 12px; padding: 8px 0; }
+  .footer p { font-size: 12px; }
 }
 .footer-legal {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 6px !important;
+  margin-bottom: 4px !important;
 }
 .footer-legal a {
   color: var(--text-3);
