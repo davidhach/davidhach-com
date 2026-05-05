@@ -109,32 +109,34 @@
       <section class="card card--lab" aria-labelledby="lab-title">
         <p id="lab-title" class="lab-title">Tap into my brain</p>
         <p class="lab-sub">Value only, promised.</p>
-        <form class="lab-form" id="newsletter" novalidate>
+        <form id="newsletter" novalidate>
           <label class="visually-hidden" for="email">Email address</label>
-          <input
-            id="email"
-            class="lab-input"
-            name="email"
-            type="email"
-            inputmode="email"
-            autocomplete="email"
-            placeholder="your@email.com"
-            required
-          />
-          <button class="lab-submit" type="submit" aria-label="Subscribe">
-            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-              <path d="M3 10h13M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
+          <div class="lab-form">
+            <input
+              id="email"
+              class="lab-input"
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              placeholder="your@email.com"
+              required
+            />
+            <button class="lab-submit" type="submit" aria-label="Subscribe">
+              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+                <path d="M3 10h13M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <label class="lab-consent">
+            <input type="checkbox" name="consent" required />
+            <span>
+              I agree to receive the newsletter at the email I provide. I can unsubscribe anytime — see the
+              <a href="/privacy">privacy notice</a>.
+            </span>
+          </label>
+          <p class="lab-status" data-status hidden></p>
         </form>
-        <label class="lab-consent">
-          <input type="checkbox" name="consent" required />
-          <span>
-            I agree to receive the newsletter at the email I provide. I can unsubscribe anytime — see the
-            <a href="/privacy">privacy notice</a>.
-          </span>
-        </label>
-        <p class="lab-status" data-status hidden></p>
       </section>
 
       <!-- Socials -->

@@ -431,12 +431,12 @@ body {
 }
 
 .lab-title {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 600;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   color: var(--text);
 }
 
@@ -517,6 +517,16 @@ body {
 .lab-consent input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+.lab-consent.is-missing input[type="checkbox"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+  animation: nudge 320ms var(--ease);
+}
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
 }
 .lab-consent input[type="checkbox"]:checked {
   background: var(--text);

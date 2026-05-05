@@ -162,9 +162,19 @@
     }
     if (!hasConsent) {
       setStatus("Please confirm consent to continue.", "error");
+      const wrap = consent && consent.closest(".lab-consent");
+      if (wrap) {
+        wrap.classList.remove("is-missing");
+        // Force reflow so the animation re-triggers on repeat clicks
+        void wrap.offsetWidth;
+        wrap.classList.add("is-missing");
+      }
       consent && consent.focus();
       return;
     }
+    // Clear any previous "missing consent" highlight as soon as it's checked
+    const wrap = consent && consent.closest(".lab-consent");
+    if (wrap) wrap.classList.remove("is-missing");
 
     if (submit) submit.disabled = true;
     setStatus("Subscribing…");
