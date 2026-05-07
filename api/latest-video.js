@@ -19,6 +19,17 @@ const UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
+// Decode common HTML entities (RSS feeds escape & < > etc).
+const decodeEntities = (s) =>
+  String(s)
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+
 // Parse `var ytInitialData = {…};</script>` from the channel HTML.
 // Returns the parsed object or null. Uses a balanced-brace walker because
 // the JSON contains escaped strings that confuse regex.
@@ -129,7 +140,7 @@ async function tryRss2Json() {
     if (!videoId || !item.title) continue;
     return {
       videoId,
-      title: String(item.title),
+      title: decodeEntities(item.title),
       publishedAt: item.pubDate
         ? new Date(item.pubDate).toISOString()
         : null
