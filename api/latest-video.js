@@ -97,21 +97,76 @@ async function fetchPublishDate(videoId) {
   }
 }
 
+// Try several public endpoints in order. First one that yields a video wins.
+async function tryChannelVideosPage() {
+  const r = await fetch(VIDEOS_URL, {
+    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" }
+  });
+  if (!r.ok) return null;
+  const html = await r.text();
+  const data = extractInitialData(html);
+  if (!data) return null;
+  return pickFirstVideo(data);
+}
+
+// rss2json.com is a free, public RSS-to-JSON proxy. It bypasses the YouTube
+// edge bot detection that 404s our direct feed fetch from Vercel IPs.
+// We filter Shorts client-side because the RSS feed lists everything.
+async function tryRss2Json() {
+  const channelId = "UCekAN8pgYfwFeujU5dRr4ww"; // @david_hach
+  const feed = encodeURIComponent(
+    `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
+  );
+  const r = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${feed}`);
+  if (!r.ok) return null;
+  const data = await r.json().catch(() => null);
+  if (!data || data.status !== "ok" || !Array.isArray(data.items)) return null;
+  for (const item of data.items) {
+    const link = String(item.link || "");
+    if (link.includes("/shorts/")) continue; // skip Shorts
+    const m = link.match(/[?&]v=([A-Za-z0-9_-]{11})/);
+    const videoId = m ? m[1] : null;
+    if (!videoId || !item.title) continue;
+    return {
+      videoId,
+      title: String(item.title),
+      publishedAt: item.pubDate
+        ? new Date(item.pubDate).toISOString()
+        : null
+    };
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
+  const debug = req.query && req.query.debug === "1";
+  const trace = [];
+
   try {
-    const r = await fetch(VIDEOS_URL, {
-      headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" }
-    });
-    if (!r.ok) throw new Error(`Channel page responded ${r.status}`);
-    const html = await r.text();
+    // 1) Channel /videos page (works from most IPs, but Vercel egress sometimes
+    //    gets a stripped page).
+    let video = null;
+    try {
+      video = await tryChannelVideosPage();
+      trace.push({ source: "channel_page", ok: !!video });
+    } catch (e) {
+      trace.push({ source: "channel_page", err: String(e.message || e) });
+    }
 
-    const data = extractInitialData(html);
-    if (!data) throw new Error("ytInitialData not found");
+    // 2) rss2json (public proxy) — robust fallback.
+    if (!video) {
+      try {
+        video = await tryRss2Json();
+        trace.push({ source: "rss2json", ok: !!video });
+      } catch (e) {
+        trace.push({ source: "rss2json", err: String(e.message || e) });
+      }
+    }
 
-    const video = pickFirstVideo(data);
-    if (!video) throw new Error("No long-form videos found on channel");
+    if (!video) throw new Error("No long-form videos found via any source");
 
-    const publishedAt = await fetchPublishDate(video.videoId);
+    const publishedAt =
+      video.publishedAt || (await fetchPublishDate(video.videoId));
 
     const payload = {
       videoId: video.videoId,
@@ -125,6 +180,8 @@ export default async function handler(req, res) {
       thumbnailHigh: `/api/yt-thumb?id=${encodeURIComponent(video.videoId)}&size=max`
     };
 
+    if (debug) payload._trace = trace;
+
     res.setHeader(
       "Cache-Control",
       "public, s-maxage=3600, stale-while-revalidate=86400"
@@ -135,7 +192,8 @@ export default async function handler(req, res) {
     res.setHeader("Cache-Control", "no-store");
     res.status(502).json({
       error: "upstream_failed",
-      message: String((err && err.message) || err)
+      message: String((err && err.message) || err),
+      trace: debug ? trace : undefined
     });
   }
 }
