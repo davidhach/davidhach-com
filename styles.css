@@ -236,9 +236,9 @@ body {
 .page {
   min-height: 100dvh;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: center;
-  padding: 20px 18px 24px;
+  padding: 18px 18px 22px;
 }
 
 @media (min-width: 720px) {
@@ -250,12 +250,13 @@ body {
   max-width: var(--container);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 @media (min-width: 720px) {
   .stack { gap: 12px; }
 }
+
 
 /* ── Top bar (tagline + theme toggle) ──────────────────── */
 .topbar {
@@ -318,7 +319,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 16px;
+  padding: 18px;
   transition:
     background-color 200ms var(--ease),
     border-color 200ms var(--ease),
@@ -443,7 +444,7 @@ body {
 /* ── Newsletter ("Tap into my brain") ──────────────────── */
 .card--lab {
   background: var(--surface);
-  padding: 16px;
+  padding: 18px;
 }
 @media (min-width: 720px) {
   .card--lab { padding: 24px; }
@@ -490,7 +491,7 @@ body {
   background: transparent;
   border: 0;
   outline: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   font-size: 15px;
   color: var(--text);
   min-width: 0;
@@ -634,6 +635,9 @@ body {
 .btn-primary:hover { background: var(--cta-bg-hover); }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:focus-visible { outline: 2px solid var(--cta-focus-ring); outline-offset: 2px; }
+@media (max-width: 719px) {
+  .btn-primary { padding: 14px 24px; }
+}
 
 /* ── Footer ────────────────────────────────────────────── */
 .footer {
@@ -650,6 +654,11 @@ body {
 @media (min-width: 720px) {
   .footer { margin-top: 12px; padding: 8px 0; }
   .footer p { font-size: 12px; }
+}
+/* On mobile, push the footer to the bottom of the viewport so content above
+   gets vertical breathing room instead of bunching at the top. */
+@media (max-width: 719px) {
+  .footer { margin-top: auto; padding-top: 12px; }
 }
 .footer-legal {
   display: flex;
