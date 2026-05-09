@@ -74,9 +74,12 @@
       </header>
 
       <!-- Latest Video -->
-      <a class="card card--video" id="latest-video" href="https://www.youtube.com/@david_hach" target="_blank" rel="noopener" data-state="loading">
+      <!-- The title + meta below are the static fallback used during the
+           split second before /api/latest-video resolves and the script
+           swaps in the live data. Update if a *much* newer video lands. -->
+      <a class="card card--video" id="latest-video" href="https://www.youtube.com/watch?v=UUO8KXuEX5w" target="_blank" rel="noopener" data-state="loading">
         <h2 class="card-heading">Latest Video</h2>
-        <p class="card-meta" data-meta>YouTube &nbsp;|&nbsp; @david_hach</p>
+        <p class="card-meta" data-meta>@david_hach</p>
         <div class="card-row">
           <div class="thumb" data-thumb aria-hidden="true">
             <!-- Placeholder; replaced by real YouTube thumbnail when API resolves -->
@@ -92,7 +95,7 @@
               <path d="M74 36 L92 45 L74 54 Z" fill="#0A0A0A"/>
             </svg>
           </div>
-          <p class="card-title" data-title>New builds, breakdowns, and lessons from shipping products with AI.</p>
+          <p class="card-title" data-title>day 1 of building a social platform | brand design with claude AI &amp; the whitepaper</p>
         </div>
         <span class="card-arrow" aria-hidden="true">↗</span>
       </a>
