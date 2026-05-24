@@ -1,0 +1,549 @@
+// Ledger data model.
+// Single-user product, but the schema is multi-user-clean: every business row
+// carries `userId` so the same DB can hold many users when the product grows.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Auth (Auth.js / NextAuth shape — kept compatible so the adapter works).
+// ────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  image           String?
+  emailVerified   DateTime?
+  displayCurrency String    @default("USD") // ISO 4217. UI converts everything to this.
+  locale          String    @default("en-US")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  authenticators  Authenticator[]   // WebAuthn / passkeys
+  entities        Entity[]
+  finAccounts     FinAccount[]
+  assets          Asset[]
+  liabilities     Liability[]
+  valuations      Valuation[]
+  snapshots       Snapshot[]
+  transactions    Transaction[]
+  categories      Category[]
+  tags            Tag[]
+  notes           Note[]
+  uploads         StatementUpload[]
+  ocrExtractions  OcrExtraction[]
+  auditLogs       AuditLog[]
+  goals           Goal[]
+}
+
+model Account {
+  // Auth.js OAuth/email account record. Not to be confused with FinAccount.
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Finance domain.
+// ────────────────────────────────────────────────────────────────────────────
+
+// Entity = a logical owner of value. Personal, Company, Trust, etc.
+// Users can have many. Net worth can be filtered by entity.
+model Entity {
+  id          String     @id @default(cuid())
+  userId      String
+  name        String
+  kind        EntityKind @default(PERSONAL)
+  currency    String     @default("USD")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  finAccounts FinAccount[]
+  assets      Asset[]
+  liabilities Liability[]
+
+  @@index([userId])
+}
+
+enum EntityKind {
+  PERSONAL
+  COMPANY
+  TRUST
+  JOINT
+  INVESTMENT
+  OTHER
+}
+
+// FinAccount = a real-world account: a bank account, brokerage, credit card,
+// crypto wallet, cash envelope. Distinct from the Auth.js `Account`.
+model FinAccount {
+  id           String         @id @default(cuid())
+  userId       String
+  entityId     String
+  name         String
+  institution  String?        // "Chase", "Interactive Brokers", "Coinbase"
+  kind         FinAccountKind
+  currency     String         @default("USD")
+  externalId   String?        // for future bank-API integrations
+  archived     Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity       Entity         @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  assets       Asset[]
+  liabilities  Liability[]
+  transactions Transaction[]
+  uploads      StatementUpload[]
+
+  @@index([userId, archived])
+  @@index([entityId])
+}
+
+enum FinAccountKind {
+  CHECKING
+  SAVINGS
+  CREDIT_CARD
+  BROKERAGE
+  RETIREMENT
+  CRYPTO_WALLET
+  CASH
+  LOAN
+  MORTGAGE
+  REAL_ESTATE
+  OTHER
+}
+
+// Asset = a thing of value. Could be a single position (AAPL shares) or an
+// aggregate balance (cash in checking). Each Asset belongs to an Entity and
+// optionally a FinAccount.
+model Asset {
+  id            String      @id @default(cuid())
+  userId        String
+  entityId      String
+  finAccountId  String?
+  categoryId    String?
+  name          String      // "AAPL", "Primary residence", "Brokerage cash"
+  symbol        String?     // ticker if applicable
+  assetClass    AssetClass  @default(CASH)
+  currency      String      @default("USD")
+  quantity      Decimal?    @db.Decimal(28, 10) // null for aggregate-value assets
+  costBasis     Decimal?    @db.Decimal(20, 2)
+  currentValue  Decimal     @db.Decimal(20, 2)  // denormalised cache of latest valuation
+  notes         String?
+  archived      Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity        Entity      @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  finAccount    FinAccount? @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  valuations    Valuation[] @relation("AssetValuations")
+  tags          TagOnAsset[]
+
+  @@index([userId, archived])
+  @@index([entityId])
+  @@index([assetClass])
+}
+
+enum AssetClass {
+  CASH
+  EQUITY
+  BOND
+  CRYPTO
+  REAL_ESTATE
+  COMMODITY
+  PRIVATE_EQUITY
+  COLLECTIBLE
+  RETIREMENT
+  RECEIVABLE
+  OTHER
+}
+
+model Liability {
+  id           String          @id @default(cuid())
+  userId       String
+  entityId     String
+  finAccountId String?
+  categoryId   String?
+  name         String
+  kind         LiabilityKind   @default(LOAN)
+  currency     String          @default("USD")
+  principal    Decimal?        @db.Decimal(20, 2)
+  interestRate Decimal?        @db.Decimal(8, 4) // %
+  currentValue Decimal         @db.Decimal(20, 2) // outstanding balance, denormalised
+  dueDate      DateTime?
+  notes        String?
+  archived     Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity       Entity          @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  finAccount   FinAccount?     @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
+  category     Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  valuations   Valuation[]     @relation("LiabilityValuations")
+
+  @@index([userId, archived])
+  @@index([entityId])
+}
+
+enum LiabilityKind {
+  CREDIT_CARD
+  LOAN
+  MORTGAGE
+  STUDENT_LOAN
+  TAX
+  PAYABLE
+  OTHER
+}
+
+// Valuation = a point-in-time value for either an Asset or a Liability.
+// We keep both in one table so the time series is uniform.
+model Valuation {
+  id          String   @id @default(cuid())
+  userId      String
+  assetId     String?
+  liabilityId String?
+  date        DateTime @db.Date
+  value       Decimal  @db.Decimal(20, 2)
+  quantity    Decimal? @db.Decimal(28, 10)
+  currency    String   @default("USD")
+  source      ValuationSource @default(MANUAL)
+  note        String?
+  createdAt   DateTime @default(now())
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset       Asset?     @relation("AssetValuations", fields: [assetId], references: [id], onDelete: Cascade)
+  liability   Liability? @relation("LiabilityValuations", fields: [liabilityId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([assetId, date])
+  @@index([liabilityId, date])
+}
+
+enum ValuationSource {
+  MANUAL
+  IMPORT
+  MARKET_FEED
+  RECONCILED
+}
+
+// Snapshot = aggregate net-worth at a point in time. Computed monthly (or
+// on demand) so the dashboard doesn't have to re-aggregate the whole history.
+model Snapshot {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime @db.Date
+  currency        String   @default("USD")
+  totalAssets     Decimal  @db.Decimal(20, 2)
+  totalLiabilities Decimal @db.Decimal(20, 2)
+  netWorth        Decimal  @db.Decimal(20, 2)
+  byAssetClass    Json     // { EQUITY: 12345.67, CASH: 8000.00, ... }
+  byEntity        Json     // { entityId: amount }
+  note            String?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// Transactions: spending/income from statement parsing or manual entry.
+model Transaction {
+  id              String       @id @default(cuid())
+  userId          String
+  finAccountId    String
+  categoryId      String?
+  ocrExtractionId String?
+  date            DateTime     @db.Date
+  postedDate      DateTime?    @db.Date
+  amount          Decimal      @db.Decimal(20, 2)  // signed: negative = outflow
+  currency        String       @default("USD")
+  description     String
+  merchant        String?
+  merchantNormalized String?   // lowercased + stripped, for dedupe matching
+  status          TxnStatus    @default(CLEARED)
+  confidence      Float?       // 0..1 from OCR; null = manual
+  reviewed        Boolean      @default(false)
+  duplicateOfId   String?
+  note            String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  finAccount      FinAccount   @relation(fields: [finAccountId], references: [id], onDelete: Restrict)
+  category        Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  ocrExtraction   OcrExtraction? @relation(fields: [ocrExtractionId], references: [id], onDelete: SetNull)
+  duplicateOf     Transaction? @relation("DuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates      Transaction[] @relation("DuplicateOf")
+  tags            TagOnTransaction[]
+
+  @@index([userId, date])
+  @@index([finAccountId, date])
+  @@index([merchantNormalized])
+}
+
+enum TxnStatus {
+  PENDING
+  CLEARED
+  REVIEW   // OCR ingested, awaiting user confirmation
+  REJECTED
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  kind        CategoryKind
+  color       String?
+  icon        String?
+  parentId    String?
+  createdAt   DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent      Category?    @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[]   @relation("CategoryTree")
+  assets      Asset[]
+  liabilities Liability[]
+  transactions Transaction[]
+
+  @@unique([userId, name, kind])
+  @@index([userId, kind])
+}
+
+enum CategoryKind {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets    TagOnAsset[]
+  transactions TagOnTransaction[]
+
+  @@unique([userId, name])
+}
+
+model TagOnAsset {
+  tagId   String
+  assetId String
+  tag     Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  @@id([tagId, assetId])
+}
+
+model TagOnTransaction {
+  tagId         String
+  transactionId String
+  tag           Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  @@id([tagId, transactionId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  body      String   @db.Text
+  date      DateTime @default(now()) @db.Date
+  targetType NoteTarget?
+  targetId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+}
+
+enum NoteTarget {
+  ASSET
+  LIABILITY
+  ENTITY
+  ACCOUNT
+  GLOBAL
+}
+
+// Statement upload + OCR.
+model StatementUpload {
+  id            String           @id @default(cuid())
+  userId        String
+  finAccountId  String?
+  fileName      String
+  mimeType      String
+  byteSize      Int
+  storageKey    String           // R2 object key
+  ivBase64      String           // GCM IV for the file
+  wrappedDekB64 String           // KEK-wrapped DEK
+  authTagB64    String           // GCM auth tag
+  status        UploadStatus     @default(PENDING)
+  errorMessage  String?
+  uploadedAt    DateTime         @default(now())
+  parsedAt      DateTime?
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  finAccount    FinAccount?      @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
+  extractions   OcrExtraction[]
+
+  @@index([userId, status])
+}
+
+enum UploadStatus {
+  PENDING       // file stored, not yet parsed
+  PARSING
+  REVIEW        // structured rows ready for user review
+  COMPLETED     // user confirmed
+  FAILED
+}
+
+model OcrExtraction {
+  id           String   @id @default(cuid())
+  userId       String
+  uploadId     String
+  model        String   // "claude-sonnet-4-6"
+  rawText      String?  @db.Text          // original model text response
+  structured   Json     // ExtractedTransaction[]
+  confidence   Float?   // model-reported aggregate confidence
+  warnings     Json?    // string[]
+  createdAt    DateTime @default(now())
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  upload       StatementUpload  @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+// Daily FX rate cache. base=USD; rates expressed as `1 USD = rate X`.
+model FxRate {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  base      String   @default("USD")
+  quote     String
+  rate      Decimal  @db.Decimal(20, 10)
+  source    String?  // "exchangerate.host"
+  fetchedAt DateTime @default(now())
+
+  @@unique([date, base, quote])
+  @@index([quote, date])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  actor     String   // userId or "system"
+  action    String   // "asset.update", "statement.upload", etc.
+  targetType String?
+  targetId  String?
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+model BackupMetadata {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  storageKey  String
+  byteSize    BigInt
+  sha256      String
+  status      BackupStatus @default(OK)
+  errorMessage String?
+  createdAt   DateTime @default(now())
+
+  @@unique([date])
+}
+
+enum BackupStatus {
+  OK
+  FAILED
+  VERIFIED
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  kind        GoalKind @default(NET_WORTH)
+  targetValue Decimal  @db.Decimal(20, 2)
+  targetDate  DateTime? @db.Date
+  currency    String   @default("USD")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum GoalKind {
+  NET_WORTH
+  ASSET_CLASS
+  SAVINGS_RATE
+  DEBT_PAYDOWN
+  CUSTOM
+}

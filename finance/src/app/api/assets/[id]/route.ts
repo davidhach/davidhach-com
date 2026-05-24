@@ -1,0 +1,70 @@
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireUserId } from "@/lib/auth";
+import { assetInput, valuationInput } from "@/lib/validation";
+import { handle, ok, parseBody, HttpError } from "@/lib/api";
+import { recordAudit } from "@/lib/audit";
+
+export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return handle(async () => {
+    const userId = await requireUserId();
+    const { id } = await ctx.params;
+    const asset = await prisma.asset.findFirst({
+      where: { id, userId },
+      include: { valuations: { orderBy: { date: "desc" }, take: 200 }, entity: true, finAccount: true, category: true, tags: { include: { tag: true } } },
+    });
+    if (!asset) throw new HttpError(404, "Asset not found");
+    return ok(asset);
+  });
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return handle(async () => {
+    const userId = await requireUserId();
+    const { id } = await ctx.params;
+    const data = await parseBody(req, assetInput.partial());
+
+    const before = await prisma.asset.findFirst({ where: { id, userId } });
+    if (!before) throw new HttpError(404, "Asset not found");
+
+    const after = await prisma.$transaction(async (tx) => {
+      const a = await tx.asset.update({
+        where: { id },
+        data: {
+          ...data,
+          // record a new valuation if currentValue changed
+        },
+      });
+      if (data.currentValue && data.currentValue !== before.currentValue.toString()) {
+        await tx.valuation.create({
+          data: {
+            userId,
+            assetId: a.id,
+            date: new Date(),
+            value: data.currentValue,
+            quantity: data.quantity ?? a.quantity,
+            currency: data.currency ?? a.currency,
+            source: "MANUAL",
+          },
+        });
+      }
+      return a;
+    });
+
+    await recordAudit({ userId, action: "asset.update", targetType: "Asset", targetId: id, before, after, req });
+    return ok(after);
+  });
+}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  return handle(async () => {
+    const userId = await requireUserId();
+    const { id } = await ctx.params;
+    const before = await prisma.asset.findFirst({ where: { id, userId } });
+    if (!before) throw new HttpError(404, "Asset not found");
+    // Soft delete via archive flag — preserves valuations & history.
+    const after = await prisma.asset.update({ where: { id }, data: { archived: true } });
+    await recordAudit({ userId, action: "asset.archive", targetType: "Asset", targetId: id, before, after, req });
+    return ok({ archived: true });
+  });
+}

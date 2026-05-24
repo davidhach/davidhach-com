@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fafafa;
+  --fg: #0a0a0a;
+  --muted: #6b7280;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --accent: #111827;
+  --positive: #059669;
+  --negative: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0a0a;
+    --fg: #fafafa;
+    --muted: #9ca3af;
+    --card: #111111;
+    --border: #1f1f1f;
+    --accent: #f5f5f5;
+    --positive: #34d399;
+    --negative: #f87171;
+  }
+}
+
+html, body { background: var(--bg); color: var(--fg); }
+body { font-feature-settings: "ss01", "cv11"; }
+
+/* Tabular numerics — non-negotiable for finance UIs. */
+.tnum { font-variant-numeric: tabular-nums; }
