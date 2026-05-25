@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/primitives";
 import { Decimal } from "decimal.js";
 import { subMonths, format, startOfMonth } from "date-fns";
 import { formatMoney } from "@/lib/utils";
+import { TransactionRecategorize } from "@/components/transaction-recategorize";
+import { AllocationPie } from "@/components/allocation-pie";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +14,20 @@ export default async function SpendingPage() {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   const from = subMonths(startOfMonth(new Date()), 3);
 
-  const txs = await prisma.transaction.findMany({
-    where: { userId, status: "CLEARED", date: { gte: from } },
-    include: { category: true, finAccount: true },
-    orderBy: { date: "desc" },
-  });
+  const [txs, categories] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { userId, status: "CLEARED", date: { gte: from } },
+      include: { category: true, finAccount: true },
+      orderBy: { date: "desc" },
+    }),
+    prisma.category.findMany({
+      where: { userId, kind: { in: ["INCOME", "EXPENSE"] } },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+    }),
+  ]);
+  const categoryOptions = categories.map((c) => ({
+    id: c.id, name: c.name, kind: c.kind as "INCOME" | "EXPENSE" | "ASSET" | "LIABILITY",
+  }));
 
   const byCategory = new Map<string, { name: string; total: Decimal }>();
   const byMerchant = new Map<string, { name: string; total: Decimal; count: number }>();
@@ -90,6 +101,53 @@ export default async function SpendingPage() {
               </li>
             ))}
           </ul>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <h2 className="font-medium text-sm text-muted mb-3">Spending by category (last 3M)</h2>
+          {byCategory.size > 0 ? (
+            <AllocationPie
+              data={[...byCategory.values()].map((c) => ({ name: c.name, value: c.total.toNumber() }))}
+              currency={user.displayCurrency}
+            />
+          ) : <p className="text-sm text-muted">No spending in range.</p>}
+        </Card>
+        <Card>
+          <h2 className="font-medium text-sm text-muted mb-3">Transactions</h2>
+          <ul className="divide-y divide-border max-h-96 overflow-auto">
+            {txs.slice(0, 100).map((t) => {
+              const amt = new Decimal(t.amount.toString());
+              const isIncome = amt.gt(0);
+              return (
+                <li key={t.id} className="py-2 grid grid-cols-[1fr_auto] gap-2 items-center">
+                  <div className="min-w-0">
+                    <div className="text-sm truncate">{t.merchant ?? t.description}</div>
+                    <div className="text-xs text-muted">
+                      {t.date.toISOString().slice(0, 10)} · {t.finAccount.name}
+                    </div>
+                    <div className="mt-1">
+                      <TransactionRecategorize
+                        txId={t.id}
+                        currentCategoryId={t.categoryId}
+                        currentCategoryName={t.category?.name ?? null}
+                        merchantNormalized={t.merchantNormalized}
+                        categories={categoryOptions}
+                        isIncome={isIncome}
+                      />
+                    </div>
+                  </div>
+                  <div className={`text-right tnum font-medium ${isIncome ? "text-positive" : ""}`}>
+                    {formatMoney(t.amount.toString(), t.currency)}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {txs.length > 100 && (
+            <p className="text-xs text-muted mt-2">Showing first 100 of {txs.length}.</p>
+          )}
         </Card>
       </div>
 

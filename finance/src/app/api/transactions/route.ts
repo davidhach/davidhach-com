@@ -5,6 +5,7 @@ import { transactionInput } from "@/lib/validation";
 import { handle, ok, parseBody } from "@/lib/api";
 import { normalizeMerchant } from "@/lib/ocr";
 import { recordAudit } from "@/lib/audit";
+import { applyRulesToTransaction } from "@/lib/category-rules";
 
 export async function GET(req: NextRequest) {
   return handle(async () => {
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest) {
         reviewed: true,
       },
     });
+    // If the user didn't provide a category, see if a learned rule covers this merchant.
+    if (!data.categoryId) await applyRulesToTransaction(userId, tx.id);
     await recordAudit({ userId, action: "transaction.create", targetType: "Transaction", targetId: tx.id, after: tx, req });
     return ok(tx, { status: 201 });
   });

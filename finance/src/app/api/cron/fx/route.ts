@@ -2,19 +2,30 @@ import { NextRequest } from "next/server";
 import { refreshFxRates } from "@/lib/fx";
 import { prisma } from "@/lib/db";
 import { takeSnapshot } from "@/lib/net-worth";
+import { refreshAllPrices } from "@/lib/price-refresh";
 
 /**
- * Daily FX refresh. The Hobby plan allows only 2 cron jobs, so the monthly
- * net-worth snapshot piggybacks on this daily job: it runs for every user when
- * it's the 1st of the month (UTC). The standalone /api/cron/snapshot route is
- * kept for manual triggering and for re-promotion to its own schedule on Pro.
+ * Daily job. The Hobby plan allows only 2 cron jobs, so this one route does
+ * three things in order:
+ *   1. Refresh FX rates from exchangerate.host (always).
+ *   2. Refresh prices for every asset with a non-manual price source (always).
+ *   3. On the 1st of the month (UTC), take a fresh net-worth Snapshot per user.
+ *
+ * Each step is independent — a failure in one is logged but doesn't abort the
+ * others. The standalone /api/cron/snapshot route is kept for manual triggers.
  */
 export async function GET(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const rates = await refreshFxRates();
+  let rates = 0, ratesError: string | null = null;
+  try { rates = await refreshFxRates(); }
+  catch (e) { ratesError = (e as Error).message; console.error("fx refresh failed", e); }
+
+  let prices = null, pricesError: string | null = null;
+  try { prices = await refreshAllPrices(); }
+  catch (e) { pricesError = (e as Error).message; console.error("price refresh failed", e); }
 
   let snapshot: { ok: number; failed: number; total: number } | null = null;
   if (new Date().getUTCDate() === 1) {
@@ -27,5 +38,5 @@ export async function GET(req: NextRequest) {
     snapshot = { ok, failed, total: users.length };
   }
 
-  return Response.json({ rates, snapshot });
+  return Response.json({ rates, ratesError, prices, pricesError, snapshot });
 }

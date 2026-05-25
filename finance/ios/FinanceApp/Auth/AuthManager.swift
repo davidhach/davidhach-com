@@ -8,18 +8,15 @@ final class AuthManager: ObservableObject {
 
     private let keychainKey = "ledger.sessionCookie"
 
-    /// Try to restore session from keychain, gated behind Face ID/Touch ID.
+    /// Try to restore the session from the keychain. The keychain item is
+    /// access-control-gated to biometry/passcode (see writeKeychain), so the
+    /// Face ID prompt happens implicitly inside readKeychain — no separate
+    /// LAContext call needed here.
     func restore() async {
         do {
-            let ctx = LAContext()
-            var err: NSError?
-            if ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) {
-                let ok = try await ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Unlock Ledger")
-                if !ok { state = .signedOut; return }
-            }
             if let cookie = readKeychain() {
                 applyCookie(cookie)
-                // Hit a cheap endpoint to verify the session is still live.
+                // Verify the session is still live server-side.
                 _ = try await APIClient.shared.get("/api/entities", as: [EmptyDecodable].self)
                 state = .signedIn
             } else {
@@ -56,21 +53,38 @@ final class AuthManager: ObservableObject {
     }
 
     private func readKeychain() -> String? {
+        // The matching SecAccessControl on the stored item forces a Face ID /
+        // passcode prompt before the data is released — defence in depth on top
+        // of BiometricLock's own gate.
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                 kSecAttrAccount as String: keychainKey,
-                                kSecReturnData as String: true]
+                                kSecReturnData as String: true,
+                                kSecUseOperationPrompt as String: "Unlock Ledger session"]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data, let s = String(data: data, encoding: .utf8) else { return nil }
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data,
+              let s = String(data: data, encoding: .utf8) else { return nil }
         return s
     }
 
     private func writeKeychain(value: String) {
+        // .userPresence = biometry (Face ID / Touch ID) OR device passcode.
+        // .thisDeviceOnly = not exported to iCloud Keychain or device backups.
+        var error: Unmanaged<CFError>?
+        guard let access = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            .userPresence,
+            &error
+        ) else { return }
+
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                 kSecAttrAccount as String: keychainKey,
-                                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                                kSecAttrAccessControl as String: access,
                                 kSecValueData as String: Data(value.utf8)]
-        SecItemDelete(q as CFDictionary)
+        // Idempotent: delete any prior copy then add.
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                       kSecAttrAccount as String: keychainKey] as CFDictionary)
         SecItemAdd(q as CFDictionary, nil)
     }
 

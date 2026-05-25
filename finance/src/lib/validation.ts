@@ -34,20 +34,28 @@ export const finAccountInput = z.object({
   currency: currency.default("USD"),
 });
 
+export const assetClassEnum = z.enum([
+  "CASH", "EQUITY", "STOCKS", "COMPANY_SHARES", "BOND", "CRYPTO", "REAL_ESTATE",
+  "COMMODITY", "PRIVATE_EQUITY", "COLLECTIBLE", "RETIREMENT", "RECEIVABLE",
+  "LOAN_RECEIVABLE", "OTHER",
+]);
+
+export const priceSourceField = z.enum(["stooq", "coingecko", "metals", "manual"]);
+
 export const assetInput = z.object({
   entityId: z.string().cuid(),
   finAccountId: z.string().cuid().optional(),
   categoryId: z.string().cuid().optional(),
+  customClassId: z.string().cuid().optional(),
   name: z.string().min(1).max(120),
   symbol: z.string().max(20).optional(),
-  assetClass: z.enum([
-    "CASH", "EQUITY", "BOND", "CRYPTO", "REAL_ESTATE", "COMMODITY",
-    "PRIVATE_EQUITY", "COLLECTIBLE", "RETIREMENT", "RECEIVABLE", "OTHER",
-  ]).default("CASH"),
+  assetClass: assetClassEnum.default("CASH"),
   currency: currency.default("USD"),
   quantity: moneyString.optional(),
   costBasis: moneyString.optional(),
   currentValue: moneyString,
+  priceSource: priceSourceField.optional(),
+  externalRef: z.string().max(100).optional(),
   notes: z.string().max(2000).optional(),
 });
 

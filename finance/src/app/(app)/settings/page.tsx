@@ -1,6 +1,7 @@
 import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Card, Badge } from "@/components/ui/primitives";
+import { CurrencyPicker } from "@/components/currency-picker";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,10 @@ export default async function SettingsPage() {
 
       <Card>
         <h2 className="font-medium text-sm mb-3">Profile</h2>
-        <dl className="grid grid-cols-2 gap-y-2 text-sm">
+        <dl className="grid grid-cols-[140px_1fr] gap-y-3 text-sm items-center">
           <dt className="text-muted">Email</dt><dd>{user?.email}</dd>
-          <dt className="text-muted">Display currency</dt><dd>{user?.displayCurrency}</dd>
+          <dt className="text-muted">Display currency</dt>
+          <dd><CurrencyPicker initial={user?.displayCurrency ?? "USD"} /></dd>
           <dt className="text-muted">Locale</dt><dd>{user?.locale}</dd>
         </dl>
       </Card>

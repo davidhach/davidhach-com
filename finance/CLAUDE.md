@@ -17,8 +17,10 @@ financial data — security and data integrity come before everything else.**
 ## Hard constraints / gotchas (learned the hard way)
 
 - **Vercel Hobby allows max 2 cron jobs.** `vercel.json` must stay at ≤2. A 3rd makes the
-  build pass but the deployment fail *after* build. (Monthly snapshot currently piggybacks
-  on the daily fx cron — runs when UTC day-of-month == 1.)
+  build pass but the deployment fail *after* build. The daily cron at `/api/cron/fx`
+  now does THREE things in order: FX refresh → price-adapter refresh (every asset with a
+  non-manual `priceSource`) → monthly snapshot (when UTC day-of-month == 1). Failures in
+  one step are logged but don't abort the others.
 - **Vercel blocks deploying vulnerable Next.js versions.** Keep Next on a patched release
   (currently `15.5.18`). Don't downgrade into a flagged version.
 - **Secrets live ONLY in Vercel env vars, never in the repo.** `.env*` is gitignored.
@@ -37,6 +39,16 @@ financial data — security and data integrity come before everything else.**
   at `/api/auth/password/login` creates `Session` rows directly so DB sessions still work
   (Auth.js Credentials provider can't do DB sessions). TOTP secrets are KEK-encrypted in
   `User.totpSecretEnc`; recovery codes are argon2id-hashed in `User.recoveryCodesHash`.
+- **Price adapters** live under `src/lib/price-adapters/`. Each implements `fetch(ref)`
+  returning `{ price, currency, date }` or `null`. `priceSource = "manual"` is a sentinel
+  meaning "don't auto-refresh, the user maintains values via `/update`".
+- **Net-worth series** (chart filter API): `src/lib/series.ts`. Spans ≤ 90 days are computed
+  daily from `Valuation` rows; longer spans use `Snapshot` rows converted at each
+  snapshot's own date for honest history. The legacy `?months=` mode on `/api/snapshots`
+  is preserved so the iOS client doesn't break.
+- **iOS biometric lock**: `BiometricLock` (foreground re-lock after 60s idle) plus a
+  `SecAccessControl`-bound keychain item for the session cookie. The lock is *device-local*
+  only — the server still demands a real session token.
 
 ## Security model — preserve it
 
