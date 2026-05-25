@@ -5,13 +5,12 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUserId } from "@/lib/auth";
+import { withAuth } from "@/lib/require-auth";
 import { verifyTotp, openSecret, generateRecoveryCodes, hashRecoveryCodes } from "@/lib/totp";
 import { totpConfirmInput } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit";
 
-export async function POST(req: Request) {
-  const userId = await requireUserId();
+export const POST = withAuth(async (userId, req) => {
   const body = await req.json().catch(() => null);
   const parsed = totpConfirmInput.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid code" }, { status: 400 });
@@ -42,4 +41,4 @@ export async function POST(req: Request) {
 
   // Recovery codes shown ONCE.
   return NextResponse.json({ ok: true, recoveryCodes: recovery });
-}
+});

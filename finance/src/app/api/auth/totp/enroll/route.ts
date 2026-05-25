@@ -7,12 +7,11 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
-import { requireUserId } from "@/lib/auth";
+import { withAuth } from "@/lib/require-auth";
 import { generateSecret, sealSecret, buildOtpauthUrl } from "@/lib/totp";
 import { recordAudit } from "@/lib/audit";
 
-export async function POST(req: Request) {
-  const userId = await requireUserId();
+export const POST = withAuth(async (userId, req) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -42,4 +41,4 @@ export async function POST(req: Request) {
     secret,    // shown once so the user can type it manually if needed
     qrSvg,     // inline SVG of the otpauth URL
   });
-}
+});

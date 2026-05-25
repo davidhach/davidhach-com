@@ -4,13 +4,12 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUserId } from "@/lib/auth";
+import { withAuth } from "@/lib/require-auth";
 import { verifyPassword } from "@/lib/password";
 import { totpDisableInput } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit";
 
-export async function POST(req: Request) {
-  const userId = await requireUserId();
+export const POST = withAuth(async (userId, req) => {
   const body = await req.json().catch(() => null);
   const parsed = totpDisableInput.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -34,4 +33,4 @@ export async function POST(req: Request) {
   await recordAudit({ userId, action: "auth.totp.disable", req });
 
   return NextResponse.json({ ok: true });
-}
+});

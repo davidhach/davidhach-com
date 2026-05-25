@@ -9,14 +9,13 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireUserId } from "@/lib/auth";
+import { withAuth } from "@/lib/require-auth";
 import { hashPassword, verifyPassword, validatePasswordStrength } from "@/lib/password";
 import { passwordSetInput } from "@/lib/validation";
 import { revokeAllSessions, issueSession } from "@/lib/auth-session";
 import { recordAudit } from "@/lib/audit";
 
-export async function POST(req: Request) {
-  const userId = await requireUserId();
+export const POST = withAuth(async (userId, req) => {
   const body = await req.json().catch(() => null);
   const parsed = passwordSetInput.safeParse(body);
   if (!parsed.success) {
@@ -55,4 +54,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true });
-}
+});
