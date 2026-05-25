@@ -49,6 +49,13 @@ financial data — security and data integrity come before everything else.**
 - **iOS biometric lock**: `BiometricLock` (foreground re-lock after 60s idle) plus a
   `SecAccessControl`-bound keychain item for the session cookie. The lock is *device-local*
   only — the server still demands a real session token.
+- **Bank / crypto / CSV connectors** (Phase 2) live under `src/lib/bank/`. Every adapter
+  implements `BankAdapter.sync()` — **no write methods exist by design**, so the app
+  literally cannot initiate a payment. `BankConnection` rows are dispatched to adapters
+  by the daily cron via `runSync(connectionId)`. Transaction dedupe uses
+  `(finAccountId, date, amount, merchantNormalized)` — same key as OCR. GoCardless requires
+  `GOCARDLESS_SECRET_ID` + `GOCARDLESS_SECRET_KEY`; without them, the EU-bank flow is
+  disabled but BTC / ETH / CSV still work.
 
 ## Security model — preserve it
 

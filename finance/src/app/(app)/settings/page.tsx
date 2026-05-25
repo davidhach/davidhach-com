@@ -8,11 +8,12 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const userId = await requireUserId();
-  const [user, entities, categoriesCount, lastBackup] = await Promise.all([
+  const [user, entities, categoriesCount, lastBackup, bankCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.entity.findMany({ where: { userId } }),
     prisma.category.count({ where: { userId } }),
     prisma.backupMetadata.findFirst({ orderBy: { date: "desc" } }),
+    prisma.bankConnection.count({ where: { userId } }),
   ]);
 
   return (
@@ -38,6 +39,18 @@ export default async function SettingsPage() {
         <EntitiesManager
           initial={entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, currency: e.currency }))}
         />
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium text-sm">Connected accounts</h2>
+          <a href="/settings/banks" className="text-xs underline text-muted">Manage connections →</a>
+        </div>
+        <p className="text-xs text-muted">
+          {bankCount === 0
+            ? "Connect a bank, crypto address, or upload a CSV to import transactions automatically."
+            : `${bankCount} connection${bankCount === 1 ? "" : "s"} configured.`}
+        </p>
       </Card>
 
       <Card>

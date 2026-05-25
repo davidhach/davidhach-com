@@ -48,6 +48,8 @@ model User {
   categories      Category[]
   customClasses   AssetClassCustom[]
   categoryRules   CategoryRule[]
+  bankConnections BankConnection[]
+  bankAccountLinks BankAccountLink[]
   tags            Tag[]
   notes           Note[]
   uploads         StatementUpload[]
@@ -158,6 +160,7 @@ model FinAccount {
   liabilities  Liability[]
   transactions Transaction[]
   uploads      StatementUpload[]
+  bankLinks    BankAccountLink[]
 
   @@index([userId, archived])
   @@index([entityId])
@@ -609,4 +612,64 @@ enum GoalKind {
   SAVINGS_RATE
   DEBT_PAYDOWN
   CUSTOM
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 2: read-only bank / crypto / CSV connectors.
+// Adapter layer in src/lib/bank/ — every adapter is read-only by construction.
+// ────────────────────────────────────────────────────────────────────────────
+
+model BankConnection {
+  id              String   @id @default(cuid())
+  userId          String
+  provider        String   // "gocardless" | "manual_csv" | "btc_address" | "eth_address"
+  institutionId   String?  // GC institution_id, e.g. "SPARKASSE_DILLINGEN_NORDLINGEN"
+  institutionName String
+  status          BankConnectionStatus @default(PENDING)
+  consentExpiresAt DateTime?
+  // GoCardless requisition id + KEK-encrypted access/refresh tokens (Text because long).
+  requisitionId   String?
+  accessTokenEnc  String?  @db.Text
+  refreshTokenEnc String?  @db.Text
+  // Crypto address (public, not sensitive but stored once)
+  address         String?
+  lastSyncedAt    DateTime?
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links           BankAccountLink[]
+
+  @@index([userId, status])
+  @@index([provider, status])
+}
+
+enum BankConnectionStatus {
+  PENDING           // awaiting user consent (GoCardless redirect outstanding)
+  ACTIVE
+  CONSENT_EXPIRED
+  ERROR
+  REVOKED
+}
+
+model BankAccountLink {
+  id              String   @id @default(cuid())
+  userId          String
+  connectionId    String
+  finAccountId    String   // user-chosen target FinAccount
+  externalId      String   // provider account id (GC accountId, BTC address, etc.)
+  iban            String?
+  currency        String
+  lastBalance     Decimal? @db.Decimal(20, 2)
+  lastBalanceAt   DateTime?
+  createdAt       DateTime @default(now())
+
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connection      BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  finAccount      FinAccount     @relation(fields: [finAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([connectionId, externalId])
+  @@index([userId])
+  @@index([finAccountId])
 }
