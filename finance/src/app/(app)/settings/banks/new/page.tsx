@@ -33,6 +33,8 @@ export default async function NewBankPage({
   const enableBankingConfigured = !!(
     process.env.ENABLE_BANKING_APP_ID && process.env.ENABLE_BANKING_PRIVATE_KEY
   );
+  const enableBankingEnv: "sandbox" | "production" =
+    process.env.ENABLE_BANKING_ENV === "sandbox" ? "sandbox" : "production";
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -50,6 +52,7 @@ export default async function NewBankPage({
           preselectedAccountId={preselectedAccountId}
           preselectedMode={params.mode ?? null}
           enableBankingConfigured={enableBankingConfigured}
+          enableBankingEnv={enableBankingEnv}
         />
       </Card>
     </div>

@@ -19,7 +19,20 @@
  */
 import { createSign } from "node:crypto";
 
-const BASE = "https://api.enablebanking.com";
+// Enable Banking uses the same hostname for both environments today; the
+// sandbox/production split is per-Application in their control panel. The
+// `ENABLE_BANKING_ENV` var is mostly a safety label surfaced in the UI so the
+// user can tell at a glance which mode they're in. `ENABLE_BANKING_BASE_URL`
+// is an escape hatch in case Enable Banking ever splits hosts.
+export type EnableBankingEnv = "sandbox" | "production";
+
+export function activeEnv(): EnableBankingEnv {
+  return process.env.ENABLE_BANKING_ENV === "sandbox" ? "sandbox" : "production";
+}
+
+function baseUrl(): string {
+  return process.env.ENABLE_BANKING_BASE_URL?.replace(/\/+$/, "") ?? "https://api.enablebanking.com";
+}
 
 function appId(): string {
   const v = process.env.ENABLE_BANKING_APP_ID;
@@ -78,7 +91,7 @@ async function call<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<{ ok: boolean; status: number; data: T | null; text?: string }> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${baseUrl()}${path}`, {
     ...init,
     headers: {
       ...(init.headers ?? {}),

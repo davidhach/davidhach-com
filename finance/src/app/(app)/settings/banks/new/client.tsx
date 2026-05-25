@@ -15,11 +15,12 @@ interface Props {
   preselectedAccountId: string | null;
   preselectedMode: string | null;
   enableBankingConfigured: boolean;
+  enableBankingEnv: "sandbox" | "production";
 }
 
 const VALID_MODES: Mode[] = ["pick", "enablebanking", "btc", "eth", "csv", "depot"];
 
-export function NewBankClient({ finAccounts, entities, preselectedAccountId, preselectedMode, enableBankingConfigured }: Props) {
+export function NewBankClient({ finAccounts, entities, preselectedAccountId, preselectedMode, enableBankingConfigured, enableBankingEnv }: Props) {
   const initialMode: Mode =
     preselectedMode && VALID_MODES.includes(preselectedMode as Mode) ? (preselectedMode as Mode) : "pick";
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -56,10 +57,10 @@ export function NewBankClient({ finAccounts, entities, preselectedAccountId, pre
     );
   }
 
-  if (mode === "pick") return <ProviderPicker onPick={setMode} enableBankingConfigured={enableBankingConfigured} />;
+  if (mode === "pick") return <ProviderPicker onPick={setMode} enableBankingConfigured={enableBankingConfigured} enableBankingEnv={enableBankingEnv} />;
   if (mode === "enablebanking") {
     return enableBankingConfigured
-      ? <EnableBankingFlow onBack={() => setMode("pick")} />
+      ? <EnableBankingFlow onBack={() => setMode("pick")} env={enableBankingEnv} />
       : <EnableBankingNotConfigured onBack={() => setMode("pick")} />;
   }
   if (mode === "btc" || mode === "eth") {
@@ -152,13 +153,18 @@ function InlineAccountCreate({ entities, onCreated }: {
 
 // ─── Provider picker ───────────────────────────────────────────────────────
 
-function ProviderPicker({ onPick, enableBankingConfigured }: {
-  onPick: (m: Mode) => void; enableBankingConfigured: boolean;
+function ProviderPicker({ onPick, enableBankingConfigured, enableBankingEnv }: {
+  onPick: (m: Mode) => void; enableBankingConfigured: boolean; enableBankingEnv: "sandbox" | "production";
 }) {
-  const items: Array<{ id: Mode; title: string; desc: string; badge?: string }> = [
+  const items: Array<{ id: Mode; title: string; desc: string; badge?: string; badgeTone?: "warning" | "neutral" }> = [
     { id: "enablebanking", title: "EU bank — automatic daily sync",
       desc: "Connect Sparkasse, Consors, N26 and other EU banks via Enable Banking (read-only PSD2 AIS). Balances and transactions pulled daily and on demand.",
-      badge: enableBankingConfigured ? undefined : "needs setup" },
+      badge: !enableBankingConfigured
+        ? "needs setup"
+        : enableBankingEnv === "sandbox"
+          ? "sandbox"
+          : undefined,
+      badgeTone: !enableBankingConfigured ? "warning" : "neutral" },
     { id: "csv", title: "Bank transactions CSV — works for everyone, no signup",
       desc: "Upload a transactions export from your bank or card. Each row becomes a Transaction. The universal fallback when a bank isn't on Enable Banking." },
     { id: "depot", title: "Broker depot CSV — current positions",
@@ -177,7 +183,11 @@ function ProviderPicker({ onPick, enableBankingConfigured }: {
             <div className="flex items-center gap-2">
               <div className="font-medium text-sm">{i.title}</div>
               {i.badge && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-700 border border-yellow-500/30">
+                <span className={`text-xs px-1.5 py-0.5 rounded border ${
+                  i.badgeTone === "warning"
+                    ? "bg-yellow-500/15 text-yellow-700 border-yellow-500/30"
+                    : "bg-accent/15 text-fg border-accent/30"
+                }`}>
                   {i.badge}
                 </span>
               )}
@@ -223,10 +233,12 @@ function EnableBankingNotConfigured({ onBack }: { onBack: () => void }) {
           <pre className="bg-bg border border-border rounded-lg p-2 mt-1 text-xs whitespace-pre-wrap">
 ENABLE_BANKING_APP_ID = &lt;application_id&gt;
 ENABLE_BANKING_PRIVATE_KEY = &lt;contents of the .pem file&gt;
+ENABLE_BANKING_ENV = sandbox   # or "production" once your live app is approved
           </pre>
           <p className="text-xs text-muted mt-1">
             Paste the private key including the <code>-----BEGIN PRIVATE KEY-----</code> /
             <code>-----END PRIVATE KEY-----</code> lines. Vercel preserves multi-line values.
+            The <code>ENABLE_BANKING_ENV</code> value is shown in the UI as a safety label.
           </p>
         </li>
         <li>Redeploy (or push any commit). Come back here — the EU-bank flow will be available.</li>
@@ -241,7 +253,7 @@ ENABLE_BANKING_PRIVATE_KEY = &lt;contents of the .pem file&gt;
 
 // ─── Enable Banking flow ───────────────────────────────────────────────────
 
-function EnableBankingFlow({ onBack }: { onBack: () => void }) {
+function EnableBankingFlow({ onBack, env }: { onBack: () => void; env: "sandbox" | "production" }) {
   const [country, setCountry] = useState("DE");
   const [filter, setFilter] = useState("");
   const [list, setList] = useState<Aspsp[] | null>(null);
@@ -276,6 +288,13 @@ function EnableBankingFlow({ onBack }: { onBack: () => void }) {
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      {env === "sandbox" && (
+        <div className="text-xs px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-700">
+          <strong>Sandbox mode.</strong> Only Enable Banking&apos;s test ASPSPs (e.g. <em>Nordea Sandbox</em>)
+          will return data; real banks won&apos;t work until you switch the Application to Production and update
+          <code> ENABLE_BANKING_ENV=production</code> (plus the production app id / key) in Vercel.
+        </div>
+      )}
       <HelpBox>
         Pick your bank. You&apos;ll be redirected to the bank&apos;s consent page to authorize
         <strong> read-only</strong> access. <strong>Ledger can never initiate a transfer</strong>

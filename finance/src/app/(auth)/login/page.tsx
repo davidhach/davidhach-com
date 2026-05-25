@@ -71,6 +71,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen grid place-items-center px-4">
+      <div className="w-full max-w-sm flex flex-col items-center">
       <Card className="w-full max-w-sm">
         <div className="text-center mb-6">
           <h1 className="font-semibold text-xl tracking-tight">Welcome back</h1>
@@ -158,6 +159,12 @@ export default function LoginPage() {
           )
         )}
       </Card>
+      <footer className="mt-6 text-xs text-muted flex items-center gap-3">
+        <a href="/privacy" className="hover:text-fg">Privacy</a>
+        <span>·</span>
+        <a href="/terms" className="hover:text-fg">Terms</a>
+      </footer>
+      </div>
     </div>
   );
 }

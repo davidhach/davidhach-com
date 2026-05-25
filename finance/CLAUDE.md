@@ -56,10 +56,18 @@ financial data — security and data integrity come before everything else.**
   `(finAccountId, date, amount, merchantNormalized)` — same key as OCR.
 - **EU-bank provider is Enable Banking** (`src/lib/bank/enablebanking/`). Auth is a JWT
   signed RS256 with `ENABLE_BANKING_PRIVATE_KEY` (PEM) and `kid` = `ENABLE_BANKING_APP_ID`.
-  Consent flow: `POST /auth` → bank redirect → callback → `POST /sessions` exchanges the
-  code for a session_id (stored on `BankConnection.requisitionId` — column reused) →
-  `GET /accounts/{uid}/balances` and `/transactions`. Without the env vars the connect
-  page shows a friendly setup guide; BTC/ETH/CSV still work.
+  `ENABLE_BANKING_ENV` ("sandbox" | "production") is a UI safety label only — the API
+  host is the same either way; sandbox vs production lives per-Application in their
+  control panel. Optional `ENABLE_BANKING_BASE_URL` override. Consent flow:
+  `POST /auth` → bank redirect → callback at exactly `/api/banks/enablebanking/callback`
+  → `POST /sessions` exchanges the code for a session_id (stored on
+  `BankConnection.requisitionId` — column reused) → `GET /accounts/{uid}/balances` and
+  `/transactions`. Without the env vars the connect page shows a friendly setup guide;
+  BTC/ETH/CSV still work.
+- **Public legal pages** at `/privacy` and `/terms` live OUTSIDE the `(app)` auth group
+  (under `src/app/privacy/` and `src/app/terms/` with a shared `LegalShell` component).
+  They must render for logged-out visitors — needed for Enable Banking's production
+  application review. Footer links from `/login`.
 - **GoCardless is legacy**. Adapter kept registered so existing rows continue to sync,
   but the Connect UI no longer offers it — GoCardless closed signups.
 - **ISIN → ticker** resolution uses OpenFIGI (free, no key required; `OPENFIGI_API_KEY`
