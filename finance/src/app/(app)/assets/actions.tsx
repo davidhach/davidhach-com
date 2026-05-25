@@ -34,16 +34,27 @@ export function AssetsActions({ hasAssets }: { hasAssets: boolean }) {
   );
 }
 
-/** Per-row controls: edit, refresh one asset's price, or delete (archive) it. */
-export function AssetRowActions({ id, name, canRefresh }: { id: string; name: string; canRefresh: boolean }) {
+/** Per-row controls: edit, refresh / resolve price, or delete (archive) it. */
+export function AssetRowActions({
+  id, name, canRefresh, needsResolve,
+}: { id: string; name: string; canRefresh: boolean; needsResolve: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"refresh" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"refresh" | "resolve" | "delete" | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function refresh() {
-    setBusy("refresh");
+    setBusy("refresh"); setMsg(null);
     await fetch(`/api/assets/${id}/refresh`, { method: "POST" });
     setBusy(null);
     router.refresh();
+  }
+  async function resolve() {
+    setBusy("resolve"); setMsg(null);
+    const res = await fetch(`/api/assets/${id}/resolve`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (res.ok) router.refresh();
+    else setMsg(data.error ?? "Resolve failed");
   }
   async function del() {
     if (!confirm(`Delete "${name}"? Its trade history is kept; the asset is archived from the dashboard.`)) return;
@@ -56,11 +67,19 @@ export function AssetRowActions({ id, name, canRefresh }: { id: string; name: st
 
   return (
     <div className="inline-flex items-center gap-1">
+      {msg && <span className="text-xs text-negative max-w-[180px] truncate" title={msg}>{msg}</span>}
       <a href={`/assets/${id}/edit`}
         title="Edit every field of this asset"
         className="px-2 py-1 rounded-md text-xs text-muted hover:bg-bg hover:text-fg">
         Edit
       </a>
+      {needsResolve && (
+        <button type="button" onClick={resolve} disabled={busy !== null}
+          title="Look up this ISIN and attach a live price source"
+          className="px-2 py-1 rounded-md text-xs text-accent hover:bg-bg disabled:opacity-50">
+          {busy === "resolve" ? "Resolving…" : "Resolve"}
+        </button>
+      )}
       {canRefresh && (
         <button type="button" onClick={refresh} disabled={busy !== null}
           title="Pull a live price for this asset"

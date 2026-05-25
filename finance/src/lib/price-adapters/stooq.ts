@@ -12,6 +12,7 @@
  * we hand back is always in major units (GBP not GBp, EUR not EUR cents).
  */
 import { Decimal } from "decimal.js";
+import { fetchWithTimeout } from "../net";
 import type { PriceQuote } from "./index";
 
 // Each suffix maps to { currency, unitScale }. unitScale multiplies the raw
@@ -47,10 +48,17 @@ export async function fetchStooq(ref: string): Promise<PriceQuote | null> {
   const cleaned = ref.trim().toUpperCase();
   if (!cleaned) return null;
   const url = `https://stooq.com/q/l/?s=${encodeURIComponent(cleaned.toLowerCase())}&f=sd2t2ohlcv&h&e=csv`;
-  const res = await fetch(url, { headers: { "User-Agent": "ledger-app" } });
-  if (!res.ok) return null;
-  const text = await res.text();
-  return parseStooqCsv(text, cleaned);
+  try {
+    const res = await fetchWithTimeout(url, {
+      timeoutMs: 3000,
+      headers: { "User-Agent": "ledger-app" },
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return parseStooqCsv(text, cleaned);
+  } catch {
+    return null;
+  }
 }
 
 export function parseStooqCsv(text: string, ref: string): PriceQuote | null {

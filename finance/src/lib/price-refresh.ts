@@ -16,6 +16,8 @@
 import { Decimal } from "decimal.js";
 import { prisma } from "./db";
 import { getAdapter, MANUAL_SOURCE } from "./price-adapters";
+import { fetchYahoo } from "./price-adapters/yahoo";
+import type { PriceQuote } from "./price-adapters";
 
 export interface AssetRefreshResult {
   status: "updated" | "skipped" | "no_quote" | "failed";
@@ -42,20 +44,32 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
   if (!adapter) return { status: "skipped", error: `Unknown adapter ${a.priceSource}` };
 
   try {
-    const quote = await adapter.fetch(a.externalRef);
+    // Primary adapter first. For stooq-sourced assets, fall through to Yahoo
+    // when Stooq has no quote (common for thin-volume UCITS ETFs like MEUD.*).
+    let quote: PriceQuote | null = await adapter.fetch(a.externalRef);
+    let usedSource = a.priceSource;
+    if (!quote && a.priceSource === "stooq") {
+      quote = await fetchYahoo(a.externalRef);
+      if (quote) usedSource = "yahoo";
+    }
     if (!quote) {
-      // Stash a friendly note so the UI can show "price unavailable" instead of
-      // silently keeping the old value.
+      // No source gave us a value. DO NOT touch currentValue — that would
+      // produce a confidently-wrong number. Stash a note so the UI can show
+      // "price unavailable" and the user can decide to enter manually.
       await prisma.asset.update({
         where: { id: a.id },
-        data: { notes: stashError(`No quote from ${a.priceSource} for ${a.externalRef}`) },
+        data: { notes: stashError(`No quote from ${a.priceSource}${a.priceSource === "stooq" ? " or yahoo" : ""} for ${a.externalRef}`) },
       });
-      return { status: "no_quote", error: `Adapter returned no data for ${a.externalRef}` };
+      return { status: "no_quote", error: `No adapter returned a quote for ${a.externalRef}` };
     }
     const today = new Date(); today.setUTCHours(0, 0, 0, 0);
     const unitValue = a.quantity
       ? new Decimal(a.quantity.toString()).mul(quote.price)
       : quote.price;
+
+    // Clear any prior "[price] …" note now that we have a real quote.
+    const cleanedNotes = (await prisma.asset.findUnique({ where: { id: a.id }, select: { notes: true } }))?.notes;
+    const notesNext = cleanedNotes && cleanedNotes.startsWith("[price] ") ? null : cleanedNotes;
 
     await prisma.$transaction([
       prisma.valuation.create({
@@ -65,7 +79,7 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
           quantity: a.quantity ?? null,
           currency: quote.currency,
           source: "PRICE_ADAPTER",
-          note: `${a.priceSource}:${a.externalRef}`,
+          note: `${usedSource}:${a.externalRef}`,
         },
       }),
       prisma.asset.update({
@@ -74,11 +88,12 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
           currentValue: unitValue.toFixed(2),
           currency: quote.currency,
           lastPricedAt: new Date(),
+          notes: notesNext,
         },
       }),
       prisma.priceHistory.upsert({
-        where: { source_externalRef_date: { source: a.priceSource, externalRef: a.externalRef, date: today } },
-        create: { source: a.priceSource, externalRef: a.externalRef, date: today,
+        where: { source_externalRef_date: { source: usedSource, externalRef: a.externalRef, date: today } },
+        create: { source: usedSource, externalRef: a.externalRef, date: today,
                   price: quote.price.toFixed(8), currency: quote.currency },
         update: { price: quote.price.toFixed(8), currency: quote.currency, fetchedAt: new Date() },
       }),

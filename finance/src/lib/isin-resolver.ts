@@ -19,6 +19,14 @@
  */
 import { prisma } from "./db";
 import { fetchStooq, stooqCurrencyForSuffix } from "./price-adapters/stooq";
+import { fetchYahoo } from "./price-adapters/yahoo";
+import { fetchWithTimeout } from "./net";
+
+// Hard caps so a slow OpenFIGI response or a long candidate list can't hang
+// the form. The Add-asset flow also tolerates total failure by saving the
+// asset without a resolved price source.
+const OPENFIGI_TIMEOUT_MS = 4000;
+const MAX_CANDIDATES = 5;
 
 export interface IsinResult {
   isin: string;
@@ -164,13 +172,19 @@ async function fetchOpenFigiAndPick(
   const key = process.env.OPENFIGI_API_KEY;
   if (key) headers["X-OPENFIGI-APIKEY"] = key;
 
-  const res = await fetch("https://api.openfigi.com/v3/mapping", {
-    method: "POST",
-    headers,
-    body: JSON.stringify([{ idType: "ID_ISIN", idValue: isin }]),
-  });
-  if (!res.ok) return null;
-  const arr = (await res.json()) as OpenFigiResp[];
+  let arr: OpenFigiResp[] = [];
+  try {
+    const res = await fetchWithTimeout("https://api.openfigi.com/v3/mapping", {
+      method: "POST",
+      headers,
+      body: JSON.stringify([{ idType: "ID_ISIN", idValue: isin }]),
+      timeoutMs: OPENFIGI_TIMEOUT_MS,
+    });
+    if (!res.ok) return null;
+    arr = (await res.json()) as OpenFigiResp[];
+  } catch {
+    return null;
+  }
   const matches = arr?.[0]?.data ?? [];
   if (matches.length === 0) return null;
 
@@ -204,11 +218,13 @@ async function fetchOpenFigiAndPick(
   if (candidates.length === 0) return null;
 
   // Validate by fetching a live quote — first candidate that returns one wins.
-  // Cap the lookups so a giant OpenFIGI response doesn't burn through Stooq.
-  for (const c of candidates.slice(0, 8)) {
+  // Try Stooq, then Yahoo as a fallback (Yahoo covers most UCITS ETFs Stooq
+  // doesn't). Hard cap at MAX_CANDIDATES so this can't run away.
+  for (const c of candidates.slice(0, MAX_CANDIDATES)) {
     const ticker = c.m.ticker!.trim().toUpperCase();
     const stooqRef = `${ticker}.${c.suffix}`;
-    const quote = await fetchStooq(stooqRef).catch(() => null);
+    const quote = await fetchStooq(stooqRef).catch(() => null)
+      ?? await fetchYahoo(stooqRef).catch(() => null);
     if (!quote) continue;
     return {
       ticker,

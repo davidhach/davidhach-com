@@ -6,17 +6,42 @@ import { subMonths, format, startOfMonth } from "date-fns";
 import { formatMoney } from "@/lib/utils";
 import { TransactionRecategorize } from "@/components/transaction-recategorize";
 import { AllocationPie } from "@/components/allocation-pie";
+import { EntityFilter } from "@/components/entity-filter";
+import { AccountFilter } from "@/components/account-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function SpendingPage() {
+export default async function SpendingPage({
+  searchParams,
+}: { searchParams: Promise<{ entity?: string; account?: string }> }) {
   const userId = await requireUserId();
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  const from = subMonths(startOfMonth(new Date()), 3);
+  const params = await searchParams;
+
+  // Whitelist filter values against the user's own rows. Never trust the URL.
+  const [entities, finAccounts] = await Promise.all([
+    prisma.entity.findMany({ where: { userId }, select: { id: true, name: true } }),
+    prisma.finAccount.findMany({
+      where: { userId, archived: false },
+      select: { id: true, name: true, entityId: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+  const entityId = params.entity && entities.some((e) => e.id === params.entity) ? params.entity : null;
+  const accountId = params.account && finAccounts.some((a) => a.id === params.account &&
+    // when both filters are set, the account must belong to the chosen entity
+    (!entityId || a.entityId === entityId)) ? params.account : null;
+
+  const txWhere = {
+    userId,
+    status: "CLEARED" as const,
+    date: { gte: subMonths(startOfMonth(new Date()), 3) },
+    ...(accountId ? { finAccountId: accountId } : entityId ? { finAccount: { entityId } } : {}),
+  };
 
   const [txs, categories] = await Promise.all([
     prisma.transaction.findMany({
-      where: { userId, status: "CLEARED", date: { gte: from } },
+      where: txWhere,
       include: { category: true, finAccount: true },
       orderBy: { date: "desc" },
     }),
@@ -54,11 +79,25 @@ export default async function SpendingPage() {
     byMonth.set(monthKey, mEntry);
   }
 
+  // The account dropdown narrows to the chosen entity (if any) so it can't
+  // suggest accounts that wouldn't match.
+  const accountsForFilter = entityId ? finAccounts.filter((a) => a.entityId === entityId) : finAccounts;
+  const activeScopeLabel = [
+    entityId && entities.find((e) => e.id === entityId)?.name,
+    accountId && finAccounts.find((a) => a.id === accountId)?.name,
+  ].filter(Boolean).join(" · ") || "All accounts";
+
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Spending</h1>
-        <p className="text-sm text-muted mt-1">Last 3 months · {user.displayCurrency}</p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Spending</h1>
+          <p className="text-sm text-muted mt-1">Last 3 months · {user.displayCurrency} · {activeScopeLabel}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <EntityFilter entities={entities} current={entityId} />
+          <AccountFilter accounts={accountsForFilter} current={accountId} />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

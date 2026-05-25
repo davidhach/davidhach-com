@@ -77,6 +77,12 @@ export default async function AssetsPage() {
                   : null;
                 const priceNote =
                   a.notes && a.notes.startsWith("[price] ") ? a.notes.slice(8) : null;
+                const looksLikeIsin = !!(a.symbol && /^[A-Z]{2}[A-Z0-9]{9}\d$/.test(a.symbol));
+                const needsResolve =
+                  a.assetClass === "STOCKS" && looksLikeIsin &&
+                  (!a.priceSource || a.priceSource === "manual" || !a.externalRef);
+                const canRefresh = !!(a.priceSource && a.priceSource !== "manual" && a.externalRef);
+                const priceUnavailable = canRefresh && !!priceNote;
                 return (
                   <tr key={a.id}>
                     <td className="px-4 py-3">
@@ -90,6 +96,11 @@ export default async function AssetsPage() {
                           {a.lastPricedAt && <> · {a.lastPricedAt.toISOString().slice(0, 10)}</>}
                         </div>
                       )}
+                      {needsResolve && (
+                        <div className="text-xs text-yellow-700">
+                          ⏳ Resolving ISIN — value pending. Click <em>Resolve</em> to retry now.
+                        </div>
+                      )}
                       {priceNote && (
                         <div className="text-xs text-yellow-700">⚠ {priceNote}</div>
                       )}
@@ -100,10 +111,19 @@ export default async function AssetsPage() {
                       {cost ? formatMoney(cost, a.currency) : "—"}
                     </td>
                     <td className="px-4 py-3 text-right tnum font-medium">
-                      {formatMoney(value, a.currency)}
+                      {priceUnavailable ? (
+                        <span className="text-muted italic" title="No live quote — showing last-known or cost basis">
+                          {cost ? formatMoney(cost, a.currency) : formatMoney(value, a.currency)}
+                          <span className="text-xs ml-1">(unavailable)</span>
+                        </span>
+                      ) : needsResolve && value.isZero() ? (
+                        <span className="text-muted italic">pending</span>
+                      ) : (
+                        formatMoney(value, a.currency)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right tnum">
-                      {pnl ? (
+                      {pnl && !priceUnavailable && !needsResolve ? (
                         <span className={pnl.gte(0) ? "text-positive" : "text-negative"}>
                           {pnl.gte(0) ? "+" : ""}{formatMoney(pnl, a.currency)}
                           {pnlPct !== null && <span className="text-xs ml-1 opacity-70">
@@ -113,7 +133,8 @@ export default async function AssetsPage() {
                       ) : <span className="text-muted">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <AssetRowActions id={a.id} name={a.name} canRefresh={!!(a.priceSource && a.priceSource !== "manual" && a.externalRef)} />
+                      <AssetRowActions id={a.id} name={a.name}
+                        canRefresh={canRefresh} needsResolve={needsResolve} />
                     </td>
                   </tr>
                 );

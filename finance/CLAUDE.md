@@ -79,6 +79,18 @@ financial data — security and data integrity come before everything else.**
 - **Stooq UK pence** handling: LSE quotes are in pence (GBp). `parseStooqCsv` multiplies
   by `.unitScale` per suffix (UK = 0.01) and reports GBP, so values are always in major
   units. Without this a 99-share holding showed £2.6M instead of £26k.
+- **Yahoo Finance fallback**: `src/lib/price-adapters/yahoo.ts` (v8 chart endpoint)
+  kicks in when Stooq returns nothing — the common failure mode for thin-volume UCITS
+  ETFs. `refreshAssetPrice` chains stooq → yahoo automatically. Yahoo's `GBp` currency
+  is auto-converted to GBP × 0.01. If BOTH sources fail, `currentValue` is NOT touched
+  — the row gets a `[price]` note and the assets table renders "(unavailable)".
+- **All upstream fetches are bounded.** `src/lib/net.ts::fetchWithTimeout` wraps every
+  external HTTP (Stooq, Yahoo, CoinGecko, OpenFIGI). Without this, a hung upstream
+  blocked the Add-asset form indefinitely (IE00BKM4GZ66 case).
+- **ISIN resolution is non-blocking.** The Add-asset form can save STOCKS with just an
+  ISIN and no resolved ticker — the server writes `symbol = ISIN`, leaves `priceSource`
+  null, and the client fires `POST /api/assets/[id]/resolve` in the background. The
+  /assets row shows a "Resolving…" / "Resolve" affordance for assets in that state.
 - **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
   a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
   cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback

@@ -81,23 +81,37 @@ export function AssetForm({
       return;
     }
     setIsinState("loading"); setIsinMsg(null);
-    const res = await fetch("/api/assets/resolve-isin", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isin: v, preferredCurrency: currency }),
-    });
-    if (res.ok) {
-      const r = await res.json();
-      setName(r.name ?? r.ticker);
-      setExternalRef(r.stooqRef);
-      setIsinState("ok");
-      const ccyNote = r.currency && r.currency !== currency
-        ? ` — listing is priced in ${r.currency}, your asset is ${currency} (we'll FX-convert)`
-        : "";
-      setIsinMsg(`Resolved to ${r.ticker} (${r.stooqRef})${ccyNote}`);
-    } else {
-      const data = await res.json().catch(() => ({}));
+    // Hard 8s client-side budget. If the upstream API / Stooq / Yahoo all hang,
+    // the user can still save the asset without a resolved listing — we just
+    // store the ISIN as `symbol` and a later refresh / manual Resolve will
+    // attach the price source.
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch("/api/assets/resolve-isin", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isin: v, preferredCurrency: currency }),
+        signal: ctrl.signal,
+      });
+      if (res.ok) {
+        const r = await res.json();
+        setName(r.name ?? r.ticker);
+        setExternalRef(r.stooqRef);
+        setIsinState("ok");
+        const ccyNote = r.currency && r.currency !== currency
+          ? ` — listing is priced in ${r.currency}, your asset is ${currency} (we'll FX-convert)`
+          : "";
+        setIsinMsg(`Resolved to ${r.ticker} (${r.stooqRef})${ccyNote}`);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setIsinState("manual");
+        setIsinMsg(data.error ?? "Couldn't resolve — you can save anyway and we'll retry on first price refresh, or enter the ticker manually below.");
+      }
+    } catch {
       setIsinState("manual");
-      setIsinMsg(data.error ?? "Couldn't resolve — enter the ticker manually below.");
+      setIsinMsg("Resolution timed out. Save the asset anyway and we'll retry in the background, or enter the ticker manually below.");
+    } finally {
+      clearTimeout(t);
     }
   }
 
@@ -121,9 +135,15 @@ export function AssetForm({
     };
     // currentValue: required on create, optional on edit.
     if (computedValue) body.currentValue = computedValue;
+    const trimmedRef = externalRef.trim();
     if (priced) {
-      body.priceSource = priced.adapter;
-      body.externalRef = externalRef.trim();
+      // Only set priceSource when we actually have a ref to feed it. STOCKS
+      // with just an ISIN (no resolved ticker) save without a price source;
+      // we'll trigger /resolve in the background right after save.
+      if (trimmedRef) {
+        body.priceSource = priced.adapter;
+        body.externalRef = trimmedRef;
+      }
       if (quantity) body.quantity = quantity;
       if (buyPrice && quantity) body.costBasis = new Decimal(quantity).mul(new Decimal(buyPrice)).toFixed(2);
       else if (costBasis) body.costBasis = costBasis;
@@ -160,6 +180,14 @@ export function AssetForm({
         }),
       });
     }
+
+    // STOCKS with an ISIN but no resolved ticker yet → fire-and-forget resolve.
+    // We don't await: the page navigates immediately and the next price refresh
+    // will pick up the new priceSource.
+    if (mode === "create" && assetClass === "STOCKS" && isin && !trimmedRef) {
+      fetch(`/api/assets/${saved.id}/resolve`, { method: "POST" }).catch(() => {});
+    }
+
     router.push(mode === "edit" && initial?.id ? `/assets/${initial.id}` : "/assets");
     router.refresh();
   }
@@ -191,6 +219,20 @@ export function AssetForm({
             </div>
           </div>
 
+          {mode === "create" && assetClass === "CASH" && (
+            <div className="text-xs border border-border rounded-lg p-3 bg-bg/60 flex items-start justify-between gap-3">
+              <p className="text-muted">
+                <strong>Tip:</strong> instead of tracking a cash balance by hand, you can
+                <strong> connect the bank account</strong> for live balance + auto-imported transactions.
+                Sparkasse, Consors, N26 and most EU banks are supported via PSD2 (read-only).
+              </p>
+              <a href="/settings/banks/new"
+                className="shrink-0 text-xs px-2 py-1.5 rounded-md border border-accent/40 text-fg bg-accent/15 hover:bg-accent/25 whitespace-nowrap">
+                Connect a bank →
+              </a>
+            </div>
+          )}
+
           {assetClass === "STOCKS" && (
             <div className="border border-border rounded-xl p-3 space-y-2">
               <Label htmlFor="isin">ISIN</Label>
@@ -215,9 +257,12 @@ export function AssetForm({
 
           {priced && (
             <div>
-              <Label>{priced.refLabel}</Label>
+              <Label>{priced.refLabel}{assetClass === "STOCKS" && isin ? " (optional — auto-resolved from ISIN)" : ""}</Label>
               <Input value={externalRef} onChange={(e) => setExternalRef(e.target.value)}
-                placeholder={priced.refPlaceholder} required />
+                placeholder={priced.refPlaceholder}
+                // STOCKS with an ISIN can save without an explicit ticker — the
+                // server will resolve later. Other priced classes still need a ref.
+                required={assetClass !== "STOCKS" || !isin.trim()} />
               <p className="text-xs text-muted mt-1">
                 {assetClass === "STOCKS" && <>Stooq suffix: <code>.US</code>, <code>.DE</code> (Xetra), <code>.FR</code> (Paris), <code>.UK</code> (LSE — pence, auto-converted), <code>.JP</code>, <code>.CH</code>…</>}
                 {assetClass === "CRYPTO" && <>CoinGecko coin id — find it at <a href="https://www.coingecko.com" target="_blank" rel="noreferrer" className="underline">coingecko.com</a> (URL slug, e.g. <code>bitcoin</code>).</>}
