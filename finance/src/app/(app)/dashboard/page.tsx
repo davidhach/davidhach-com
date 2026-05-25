@@ -6,27 +6,43 @@ import { startOfMonth, subMonths } from "date-fns";
 import { Card, Badge, Button } from "@/components/ui/primitives";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AllocationPie } from "@/components/allocation-pie";
+import { EntityFilter } from "@/components/entity-filter";
 import { formatMoney, formatPercent, pctChange } from "@/lib/utils";
 import { convert } from "@/lib/fx";
 import { Decimal } from "decimal.js";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: { searchParams: Promise<{ entity?: string }> }) {
   const userId = await requireUserId();
-  const [breakdown, snapshots, recentTxs, entitiesRaw] = await Promise.all([
-    liveNetWorth(userId),
+  const { entity: entityParam } = await searchParams;
+  const entitiesRaw = await prisma.entity.findMany({
+    where: { userId }, select: { id: true, name: true },
+  });
+  // Validate the filter against the user's own entities — never trust the URL.
+  const entityId = entityParam && entitiesRaw.some((e) => e.id === entityParam)
+    ? entityParam
+    : null;
+
+  // Transaction filter: when scoped, restrict to txns whose finAccount belongs to the entity.
+  const txEntityFilter = entityId ? { finAccount: { entityId } } : {};
+
+  const [breakdown, snapshots, recentTxs] = await Promise.all([
+    liveNetWorth(userId, { entityId: entityId ?? undefined }),
     prisma.snapshot.findMany({
+      // Snapshots are global today — no per-entity column. When scoped we just
+      // hide the historical series rather than show misleading totals.
       where: { userId, date: { gte: subMonths(new Date(), 24) } },
       orderBy: { date: "asc" },
     }),
     prisma.transaction.findMany({
-      where: { userId, status: "CLEARED" },
+      where: { userId, status: "CLEARED", ...txEntityFilter },
       orderBy: { date: "desc" },
       take: 6,
       include: { category: true, finAccount: true },
     }),
-    prisma.entity.findMany({ where: { userId }, select: { id: true, name: true } }),
   ]);
 
   const ccy = breakdown.currency;
@@ -42,7 +58,7 @@ export default async function DashboardPage() {
   // ── This-month income / spend rollup for the dashboard widget ─────────────
   const monthStart = startOfMonth(new Date());
   const monthTxs = await prisma.transaction.findMany({
-    where: { userId, status: "CLEARED", date: { gte: monthStart } },
+    where: { userId, status: "CLEARED", date: { gte: monthStart }, ...txEntityFilter },
     include: { category: { select: { name: true, kind: true } } },
   });
 
@@ -83,17 +99,27 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-muted">Net worth</p>
+          <p className="text-sm text-muted flex items-center gap-2">
+            Net worth
+            {entityId && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-fg">
+                {entitiesRaw.find((e) => e.id === entityId)?.name}
+              </span>
+            )}
+          </p>
           <h1 className="text-3xl font-semibold tnum tracking-tight">{formatMoney(breakdown.netWorth, ccy)}</h1>
           <div className="flex items-center gap-2 mt-2 text-xs">
             <Badge tone={momChange >= 0 ? "positive" : "negative"}>{formatPercent(momChange)} MoM</Badge>
             <Badge tone={ytdChange >= 0 ? "positive" : "negative"}>{formatPercent(ytdChange)} since {oldest ? oldest.date.toISOString().slice(0, 7) : "—"}</Badge>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Link href="/update"><Button variant="secondary">Update values</Button></Link>
-          <Link href="/statements"><Button variant="secondary">Upload statement</Button></Link>
-          <Link href="/assets"><Button>Add asset</Button></Link>
+        <div className="flex flex-col items-end gap-2">
+          <EntityFilter entities={entitiesRaw} current={entityId} />
+          <div className="flex gap-2">
+            <Link href="/update"><Button variant="secondary">Update values</Button></Link>
+            <Link href="/statements"><Button variant="secondary">Upload statement</Button></Link>
+            <Link href="/assets"><Button>Add asset</Button></Link>
+          </div>
         </div>
       </header>
 

@@ -6,11 +6,18 @@ export const dynamic = "force-dynamic";
 
 export default async function UpdatePage() {
   const userId = await requireUserId();
-  const assets = await prisma.asset.findMany({
-    where: { userId, archived: false },
-    orderBy: [{ assetClass: "asc" }, { name: "asc" }],
-    include: { entity: { select: { name: true } } },
-  });
+  const [assets, finAccounts] = await Promise.all([
+    prisma.asset.findMany({
+      where: { userId, archived: false },
+      orderBy: [{ assetClass: "asc" }, { name: "asc" }],
+      include: { entity: { select: { name: true } } },
+    }),
+    prisma.finAccount.findMany({
+      where: { userId, archived: false },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, currency: true },
+    }),
+  ]);
 
   const rows = assets.map((a) => ({
     id: a.id,
@@ -19,6 +26,10 @@ export default async function UpdatePage() {
     assetClass: a.assetClass,
     currency: a.currency,
     currentValue: a.currentValue.toString(),
+    quantity: a.quantity?.toString() ?? null,
+    priceSource: a.priceSource,
+    externalRef: a.externalRef,
+    isPriced: !!(a.priceSource && a.priceSource !== "manual" && a.externalRef),
   }));
 
   return (
@@ -26,11 +37,13 @@ export default async function UpdatePage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Update values</h1>
         <p className="text-sm text-muted mt-1">
-          Pick a date, enter new values for any subset of assets, save. Old entries are
-          never modified — every save creates a new historical record.
+          For <strong>manual</strong> assets, type a new value. For{" "}
+          <strong>auto-priced</strong> assets (stocks, crypto, metals), record a BUY or SELL
+          and the system recomputes value from quantity × latest price. Old entries are
+          never modified.
         </p>
       </header>
-      <BulkUpdateClient assets={rows} />
+      <BulkUpdateClient assets={rows} finAccounts={finAccounts} />
     </div>
   );
 }

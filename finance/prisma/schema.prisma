@@ -50,6 +50,7 @@ model User {
   categoryRules   CategoryRule[]
   bankConnections BankConnection[]
   bankAccountLinks BankAccountLink[]
+  assetTransactions AssetTransaction[]
   tags            Tag[]
   notes           Note[]
   uploads         StatementUpload[]
@@ -161,6 +162,7 @@ model FinAccount {
   transactions Transaction[]
   uploads      StatementUpload[]
   bankLinks    BankAccountLink[]
+  assetTxns    AssetTransaction[]
 
   @@index([userId, archived])
   @@index([entityId])
@@ -211,12 +213,49 @@ model Asset {
   category      Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   customClass   AssetClassCustom? @relation(fields: [customClassId], references: [id], onDelete: SetNull)
   valuations    Valuation[]       @relation("AssetValuations")
+  transactions  AssetTransaction[]
   tags          TagOnAsset[]
 
   @@index([userId, archived])
   @@index([entityId])
   @@index([assetClass])
   @@index([priceSource, lastPricedAt])
+}
+
+// AssetTransaction = a BUY or SELL that adjusts an Asset's quantity. The
+// authoritative ledger for cost basis (FIFO/average) and realised P/L.
+// Manual-priced (non-quantity) assets don't use this; they keep using Valuation.
+model AssetTransaction {
+  id            String              @id @default(cuid())
+  userId        String
+  assetId       String
+  kind          AssetTransactionKind
+  date          DateTime            @db.Date
+  quantity      Decimal             @db.Decimal(28, 10)  // always positive; kind decides sign
+  pricePerUnit  Decimal             @db.Decimal(20, 8)   // in `currency`
+  currency      String
+  fee           Decimal?            @db.Decimal(20, 2)
+  finAccountId  String?             // the cash account the buy/sell hit, if known
+  sourceTxId    String?             // when promoted from a connected-cash Transaction (suggested trade)
+  note          String?
+  createdAt     DateTime            @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset         Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  finAccount    FinAccount? @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
+
+  @@index([userId, date])
+  @@index([assetId, date])
+  @@index([sourceTxId])
+}
+
+enum AssetTransactionKind {
+  BUY
+  SELL
+  DIVIDEND
+  SPLIT
+  TRANSFER_IN
+  TRANSFER_OUT
 }
 
 enum AssetClass {
@@ -538,6 +577,35 @@ model OcrExtraction {
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   upload       StatementUpload  @relation(fields: [uploadId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+}
+
+// Per-(source, externalRef) daily price history. Written by the price-refresh
+// cron so series.ts can compute historical asset value = quantity × price-at-date.
+// Source = adapter id ("stooq" | "coingecko" | "metals"); externalRef = ticker /
+// coin id / metal symbol. Currency is the adapter's native quote currency.
+model PriceHistory {
+  id          String   @id @default(cuid())
+  source      String
+  externalRef String
+  date        DateTime @db.Date
+  price       Decimal  @db.Decimal(20, 8)
+  currency    String
+  fetchedAt   DateTime @default(now())
+
+  @@unique([source, externalRef, date])
+  @@index([source, externalRef, date])
+}
+
+// OpenFIGI cache: ISIN → ticker + name. Avoids hammering the free OpenFIGI API
+// for repeat lookups. fetchedAt lets us refresh stale entries later if needed.
+model IsinMapping {
+  isin       String   @id
+  ticker     String?  // best-fit primary ticker (e.g. "AAPL")
+  stooqRef   String?  // ticker with stooq suffix ("AAPL.US")
+  name       String?
+  exchange   String?
+  marketCode String?
+  fetchedAt  DateTime @default(now())
 }
 
 // Daily FX rate cache. base=USD; rates expressed as `1 USD = rate X`.

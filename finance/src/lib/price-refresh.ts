@@ -80,6 +80,23 @@ export async function refreshAllPrices(): Promise<RefreshSummary> {
             lastPricedAt: new Date(),
           },
         }),
+        // Also persist the per-unit price in PriceHistory keyed on (source, ref, date).
+        // Lets series.ts reconstruct historical value = quantity × historical price
+        // without recomputing every Valuation row.
+        prisma.priceHistory.upsert({
+          where: {
+            source_externalRef_date: {
+              source: a.priceSource, externalRef: a.externalRef, date: today,
+            },
+          },
+          create: {
+            source: a.priceSource, externalRef: a.externalRef, date: today,
+            price: quote.price.toFixed(8), currency: quote.currency,
+          },
+          update: {
+            price: quote.price.toFixed(8), currency: quote.currency, fetchedAt: new Date(),
+          },
+        }),
       ]);
       summary.updated++;
     } catch (e) {

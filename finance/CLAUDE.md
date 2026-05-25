@@ -56,6 +56,24 @@ financial data — security and data integrity come before everything else.**
   `(finAccountId, date, amount, merchantNormalized)` — same key as OCR. GoCardless requires
   `GOCARDLESS_SECRET_ID` + `GOCARDLESS_SECRET_KEY`; without them, the EU-bank flow is
   disabled but BTC / ETH / CSV still work.
+- **ISIN → ticker** resolution uses OpenFIGI (free, no key required; `OPENFIGI_API_KEY`
+  raises the rate limit). Cached in `IsinMapping`. Resolver lives in `src/lib/isin-resolver.ts`.
+- **Quantity-based assets** (STOCKS / CRYPTO with a non-manual `priceSource`): the
+  authoritative ledger is `AssetTransaction` (BUY / SELL / TRANSFER_IN / SPLIT / DIVIDEND).
+  `Asset.quantity` + `Asset.currentValue` are denormalised caches recomputed on every
+  AssetTransaction insert and overwritten by the daily price cron. `PriceHistory` persists
+  per-(source, ref, date) prices so historical value = quantity × price-at-date.
+  Manual assets keep using `Valuation` exactly as before — both code paths coexist.
+- **Suggested trades**: `src/lib/suggested-trades.ts` detects KAUF/VERKAUF/BUY/SELL on
+  connected-cash `Transaction.description`. The user confirms via `/api/trades/confirm`,
+  which creates an `AssetTransaction` with `sourceTxId = <Transaction.id>` so the same
+  cash row never re-suggests.
+- **Broker depot CSV**: PSD2 doesn't expose depot positions, so we accept a positions
+  CSV at `/api/banks/csv/depot/{preview,commit}`. Each row find-or-creates an Asset and
+  records a `TRANSFER_IN` AssetTransaction (not BUY — opening position, not a real trade).
+- **Dashboard entity filter** uses `?entity=<id>` and runs the URL through a whitelist
+  of the user's own entities before any DB query. `liveNetWorth(userId, { entityId })`
+  and `aggregateNetWorth(...)` (pure, unit-tested) do the math.
 
 ## Security model — preserve it
 

@@ -25,17 +25,48 @@ export interface NetWorthBreakdown {
   liabilityCount: number;
 }
 
-export async function liveNetWorth(userId: string, displayCurrency?: string): Promise<NetWorthBreakdown> {
+export interface LiveOptions {
+  displayCurrency?: string;
+  entityId?: string;     // when set, restrict to assets/liabilities for this entity
+}
+
+export async function liveNetWorth(userId: string, optsOrCcy?: LiveOptions | string): Promise<NetWorthBreakdown> {
+  const opts: LiveOptions =
+    typeof optsOrCcy === "string" ? { displayCurrency: optsOrCcy } : optsOrCcy ?? {};
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  const ccy = displayCurrency ?? user.displayCurrency;
+  const ccy = opts.displayCurrency ?? user.displayCurrency;
+  const entityFilter = opts.entityId ? { entityId: opts.entityId } : {};
   const today = new Date();
 
   const [assets, liabilities, entities] = await Promise.all([
-    prisma.asset.findMany({ where: { userId, archived: false } }),
-    prisma.liability.findMany({ where: { userId, archived: false } }),
-    prisma.entity.findMany({ where: { userId } }),
+    prisma.asset.findMany({ where: { userId, archived: false, ...entityFilter } }),
+    prisma.liability.findMany({ where: { userId, archived: false, ...entityFilter } }),
+    prisma.entity.findMany({
+      where: { userId, ...(opts.entityId ? { id: opts.entityId } : {}) },
+    }),
   ]);
 
+  return aggregateNetWorth({
+    assets, liabilities, entities,
+    displayCurrency: ccy,
+    asOf: today,
+    convert: (a, from) => convert({ amount: a, from, to: ccy, date: today }),
+  });
+}
+
+/**
+ * Pure aggregation step. Pulled out of liveNetWorth so it's unit-testable
+ * without a database — feed it plain objects + a fake `convert`.
+ */
+export async function aggregateNetWorth(input: {
+  assets: Array<{ entityId: string; assetClass: string; currency: string; currentValue: { toString(): string } }>;
+  liabilities: Array<{ entityId: string; currency: string; currentValue: { toString(): string } }>;
+  entities: Array<{ id: string; name: string }>;
+  displayCurrency: string;
+  asOf: Date;
+  convert: (amount: Decimal, from: string) => Promise<Decimal>;
+}): Promise<NetWorthBreakdown> {
+  const { assets, liabilities, entities, displayCurrency, asOf } = input;
   const byAssetClass: Record<string, Decimal> = {};
   const byEntity: Record<string, { name: string; value: Decimal }> = Object.fromEntries(
     entities.map((e) => [e.id, { name: e.name, value: new Decimal(0) }]),
@@ -43,8 +74,7 @@ export async function liveNetWorth(userId: string, displayCurrency?: string): Pr
 
   let totalAssets = new Decimal(0);
   for (const a of assets) {
-    const native = new Decimal(a.currentValue.toString());
-    const converted = await convert({ amount: native, from: a.currency, to: ccy, date: today });
+    const converted = await input.convert(new Decimal(a.currentValue.toString()), a.currency);
     totalAssets = totalAssets.plus(converted);
     byAssetClass[a.assetClass] = (byAssetClass[a.assetClass] ?? new Decimal(0)).plus(converted);
     if (byEntity[a.entityId]) byEntity[a.entityId].value = byEntity[a.entityId].value.plus(converted);
@@ -52,15 +82,14 @@ export async function liveNetWorth(userId: string, displayCurrency?: string): Pr
 
   let totalLiabilities = new Decimal(0);
   for (const l of liabilities) {
-    const native = new Decimal(l.currentValue.toString());
-    const converted = await convert({ amount: native, from: l.currency, to: ccy, date: today });
+    const converted = await input.convert(new Decimal(l.currentValue.toString()), l.currency);
     totalLiabilities = totalLiabilities.plus(converted);
     if (byEntity[l.entityId]) byEntity[l.entityId].value = byEntity[l.entityId].value.minus(converted);
   }
 
   return {
-    asOf: today,
-    currency: ccy,
+    asOf,
+    currency: displayCurrency,
     totalAssets,
     totalLiabilities,
     netWorth: totalAssets.minus(totalLiabilities),

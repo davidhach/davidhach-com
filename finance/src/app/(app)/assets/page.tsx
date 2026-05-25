@@ -3,6 +3,7 @@ import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Card, Button, Badge } from "@/components/ui/primitives";
 import { formatMoney } from "@/lib/utils";
+import { SuggestedTrades } from "@/components/suggested-trades";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,13 @@ export default async function AssetsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
         <Link href="/assets/new"><Button>Add asset</Button></Link>
       </header>
+
+      <SuggestedTrades
+        assets={assets.map((a) => ({
+          id: a.id, name: a.name, symbol: a.symbol,
+          currency: a.currency, priceSource: a.priceSource, externalRef: a.externalRef,
+        }))}
+      />
 
       {assets.length === 0 ? (
         <Card className="text-center py-12">

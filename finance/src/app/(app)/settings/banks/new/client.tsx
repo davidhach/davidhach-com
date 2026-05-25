@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
-type Mode = "pick" | "gocardless" | "btc" | "eth" | "csv";
+type Mode = "pick" | "gocardless" | "btc" | "eth" | "csv" | "depot";
 
 interface FinAccount { id: string; name: string; currency: string; kind: string }
 interface Institution { id: string; name: string; bic: string | null; transactionDays: string | null }
@@ -12,10 +12,18 @@ export function NewBankClient({ finAccounts }: { finAccounts: FinAccount[] }) {
   const [mode, setMode] = useState<Mode>("pick");
 
   if (finAccounts.length === 0) {
-    return <p className="text-sm text-muted">
-      Create a financial account first (e.g. a checking account) under <a className="underline" href="/accounts">Accounts</a>.
-      Connections link to one of your accounts.
-    </p>;
+    return (
+      <div className="space-y-3 text-center py-6">
+        <p className="text-sm text-muted">
+          You need an <strong>account</strong> first — a connection always links to one of your
+          financial accounts (e.g. your Sparkasse checking) so transactions and balances have
+          somewhere to live.
+        </p>
+        <a href="/accounts">
+          <Button>Add an account</Button>
+        </a>
+      </div>
+    );
   }
 
   if (mode === "pick") return <ProviderPicker onPick={setMode} />;
@@ -24,7 +32,8 @@ export function NewBankClient({ finAccounts }: { finAccounts: FinAccount[] }) {
     return <CryptoForm provider={mode === "btc" ? "btc_address" : "eth_address"}
       finAccounts={finAccounts} onBack={() => setMode("pick")} />;
   }
-  return <CsvFlow finAccounts={finAccounts} onBack={() => setMode("pick")} />;
+  if (mode === "csv") return <CsvFlow finAccounts={finAccounts} onBack={() => setMode("pick")} />;
+  return <DepotCsvFlow finAccounts={finAccounts} onBack={() => setMode("pick")} />;
 }
 
 function ProviderPicker({ onPick }: { onPick: (m: Mode) => void }) {
@@ -37,6 +46,8 @@ function ProviderPicker({ onPick }: { onPick: (m: Mode) => void }) {
       desc: "Track a public ETH address's balance via a public RPC. Read-only." },
     { id: "csv", title: "Upload CSV statement",
       desc: "Import transactions from a bank-exported CSV. Works as a universal fallback." },
+    { id: "depot", title: "Broker depot (positions CSV)",
+      desc: "Import current holdings from your broker's depot export (Comdirect, Consors, etc.). PSD2 cannot expose depot positions, so CSV is the realistic path." },
   ];
   return (
     <ul className="space-y-2">
@@ -271,6 +282,133 @@ function CsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: (
         <p className="text-sm text-positive">
           Imported {result.inserted} new transaction{result.inserted === 1 ? "" : "s"}.
           {result.duplicates > 0 && ` Skipped ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"}.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface DepotRow { isin?: string; ticker?: string; name: string; quantity: string; avgPrice?: string; currency: string }
+
+function DepotCsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: () => void }) {
+  const [finAccountId, setFinAccountId] = useState(finAccounts[0]?.id ?? "");
+  const [currency, setCurrency] = useState(finAccounts[0]?.currency ?? "EUR");
+  const [entities, setEntities] = useState<Array<{ id: string; name: string }>>([]);
+  const [entityId, setEntityId] = useState<string>("");
+  const [preview, setPreview] = useState<{ rows: DepotRow[]; warnings: string[]; fileName: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ created: number; reused: number; trades: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/entities").then((r) => r.json()).then((es) => {
+      setEntities(es); if (es[0]) setEntityId(es[0].id);
+    });
+  }, []);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setError(null); setResult(null);
+    const fd = new FormData();
+    fd.set("file", file); fd.set("currency", currency);
+    const res = await fetch("/api/banks/csv/depot/preview", { method: "POST", body: fd });
+    const data = await res.json();
+    setBusy(false);
+    if (res.ok) setPreview({ rows: data.rows, warnings: data.warnings, fileName: data.fileName });
+    else setError(data.error ?? "Parse failed");
+  }
+
+  async function commit() {
+    if (!preview || !entityId) return;
+    setBusy(true); setError(null);
+    const res = await fetch("/api/banks/csv/depot/commit", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityId, finAccountId: finAccountId || undefined, rows: preview.rows }),
+    });
+    const data = await res.json();
+    setBusy(false);
+    if (res.ok) setResult({ created: data.created, reused: data.reused, trades: data.trades });
+    else setError(data.error ?? "Commit failed");
+  }
+
+  return (
+    <div className="space-y-3">
+      <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      <p className="text-xs text-muted">
+        Export your depot positions from your broker (Comdirect, Consors, Trade Republic, …) and
+        upload the CSV here. We&apos;ll create or update one Asset per row and record an opening
+        transfer-in. Daily prices come from the auto-priced cron afterwards.
+      </p>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label>Entity</Label>
+          <Select value={entityId} onChange={(e) => setEntityId(e.target.value)}>
+            {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label>Cash account (optional link)</Label>
+          <Select value={finAccountId} onChange={(e) => {
+            setFinAccountId(e.target.value);
+            const a = finAccounts.find((x) => x.id === e.target.value);
+            if (a) setCurrency(a.currency);
+          }}>
+            <option value="">— none —</option>
+            {finAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label>Default currency</Label>
+          <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className="uppercase" />
+        </div>
+      </div>
+      <div>
+        <Label>Depot CSV file</Label>
+        <input type="file" accept=".csv,text/csv" onChange={onFile}
+          className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-card file:px-3 file:py-1.5 file:text-sm" />
+        <p className="text-xs text-muted mt-1">Comma or semicolon. Auto-detects ISIN / name / quantity / cost columns.</p>
+      </div>
+      {error && <p className="text-xs text-negative">{error}</p>}
+      {busy && <p className="text-xs text-muted">Working…</p>}
+      {preview && !result && (
+        <div className="space-y-2">
+          <p className="text-sm">{preview.rows.length} positions parsed from <strong>{preview.fileName}</strong>.</p>
+          {preview.warnings.length > 0 && (
+            <ul className="text-xs text-yellow-700 list-disc pl-4">
+              {preview.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          )}
+          <div className="border border-border rounded-xl max-h-72 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="text-muted bg-bg sticky top-0">
+                <tr>
+                  <th className="text-left px-2 py-1.5">Name</th>
+                  <th className="text-left px-2 py-1.5">ISIN</th>
+                  <th className="text-right px-2 py-1.5">Qty</th>
+                  <th className="text-right px-2 py-1.5">Avg price</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {preview.rows.slice(0, 200).map((r, i) => (
+                  <tr key={i}>
+                    <td className="px-2 py-1 truncate max-w-[220px]">{r.name}</td>
+                    <td className="px-2 py-1 tnum">{r.isin ?? r.ticker ?? "—"}</td>
+                    <td className="px-2 py-1 text-right tnum">{r.quantity}</td>
+                    <td className="px-2 py-1 text-right tnum">{r.avgPrice ?? "—"} {r.currency}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Button onClick={commit} disabled={busy || !entityId}>
+            {busy ? "Importing…" : `Import ${preview.rows.length} position${preview.rows.length === 1 ? "" : "s"}`}
+          </Button>
+        </div>
+      )}
+      {result && (
+        <p className="text-sm text-positive">
+          {result.created} new asset{result.created === 1 ? "" : "s"} created · {result.reused} matched existing · {result.trades} transfer-in record{result.trades === 1 ? "" : "s"} added.
         </p>
       )}
     </div>
