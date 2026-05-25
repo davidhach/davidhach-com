@@ -5,10 +5,12 @@
  * OWASP 2024 ASVS L1 parameters: m=19MiB, t=2, p=1. Fast enough on Vercel's
  * 1024-MB function (≈40 ms per hash) yet costly enough to deter offline cracking.
  */
-import { hash, verify, Algorithm } from "@node-rs/argon2";
+import { hash, verify } from "@node-rs/argon2";
 
+// Argon2id is @node-rs/argon2's default algorithm; we don't set it explicitly
+// because its `Algorithm` const enum can't be referenced under Next's
+// `isolatedModules` build (TS2748). memoryCost/timeCost/parallelism = OWASP 2024.
 const PARAMS = {
-  algorithm: Algorithm.Argon2id,
   memoryCost: 19456,   // 19 MiB
   timeCost: 2,
   parallelism: 1,
