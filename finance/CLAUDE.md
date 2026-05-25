@@ -105,10 +105,19 @@ financial data — security and data integrity come before everything else.**
   row (`Asset.managedByLinkId` FK, onDelete: Cascade). BANK → CASH at `lastBalance`,
   `btc_address` → CRYPTO "Bitcoin" (coingecko: bitcoin), `eth_address` → CRYPTO
   "Ethereum" (coingecko: ethereum). Upsert keyed on `managedByLinkId` so re-syncs
-  never duplicate. PATCH/DELETE on `/api/assets/[id]` and AssetTransaction POST
-  refuse with 409 for managed rows; the only way to remove one is to disconnect
-  the connection (the cascade tears the asset down). The /assets row + detail
-  page show a 🔒 auto-synced badge and hide Edit/Delete.
+  never duplicate. PATCH/DELETE on `/api/assets/[id]`, AssetTransaction POST, AND
+  `/api/trades/confirm` all refuse with 409 for managed rows — the trades-confirm
+  guard is critical because `summarisePosition` would otherwise overwrite the
+  wallet-balance quantity from an empty AssetTransaction ledger. The only way to
+  remove a managed asset is to disconnect the connection (the cascade tears it
+  down). The /assets row + detail page show a 🔒 auto-synced badge and hide
+  Edit/Delete. **Invariant:** for managed assets, `quantity` is WALLET-BALANCE-
+  AUTHORITATIVE (written only by `upsertManagedAsset`); `refreshAssetPrice` never
+  touches it. On re-sync, `upsertManagedAsset` rewrites quantity from the fresh
+  wallet reading but leaves `currentValue` + `currency` alone for crypto — those
+  are owned by `refreshAssetPrice`, which stores them in the user's display
+  currency (CoinGecko USD → EUR via `convertSafe`) so the assets page reads
+  "€30,000" instead of raw "$". Regression tests in `tests/managed-asset-invariants.test.ts`.
 - **ETH adapter** tries `ETH_RPC_URL` (if set) then publicnode → llamarpc → ankr,
   each through `fetchWithTimeout(4s)`. Real RPC errors surface in the connection's
   `lastError` instead of a generic 500. Wei→ETH via BigInt to keep sub-gwei precision.

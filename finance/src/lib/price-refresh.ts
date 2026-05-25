@@ -17,6 +17,7 @@ import { Decimal } from "decimal.js";
 import { prisma } from "./db";
 import { getAdapter, MANUAL_SOURCE } from "./price-adapters";
 import { fetchYahoo } from "./price-adapters/yahoo";
+import { convertSafe } from "./fx";
 import type { PriceQuote } from "./price-adapters";
 
 export interface AssetRefreshResult {
@@ -33,7 +34,7 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
     where: { id: assetId },
     select: {
       id: true, userId: true, currency: true, quantity: true,
-      priceSource: true, externalRef: true,
+      priceSource: true, externalRef: true, managedByLinkId: true,
     },
   });
   if (!a) return { status: "failed", error: "Asset not found" };
@@ -63,21 +64,52 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
       return { status: "no_quote", error: `No adapter returned a quote for ${a.externalRef}` };
     }
     const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-    const unitValue = a.quantity
+    const unitValueInQuoteCcy = a.quantity
       ? new Decimal(a.quantity.toString()).mul(quote.price)
       : quote.price;
+
+    // Managed crypto assets (Asset.managedByLinkId set) store currentValue in
+    // the user's display currency so the /assets page reads "€30,000" instead
+    // of raw USD from CoinGecko. Manual assets keep the adapter currency —
+    // users want to see their EUR ETF in EUR, not auto-converted.
+    let storeValue = unitValueInQuoteCcy;
+    let storeCurrency = quote.currency;
+    if (a.managedByLinkId) {
+      const user = await prisma.user.findUnique({
+        where: { id: a.userId },
+        select: { displayCurrency: true },
+      });
+      const displayCcy = user?.displayCurrency ?? quote.currency;
+      if (displayCcy !== quote.currency) {
+        const conv = await convertSafe({
+          amount: unitValueInQuoteCcy, from: quote.currency, to: displayCcy, date: today,
+        });
+        if (conv.ok) {
+          storeValue = conv.amount;
+          storeCurrency = displayCcy;
+        }
+        // If FX is unavailable, fall through with the quote-currency value —
+        // honest "we couldn't convert" rather than zeroing the value out.
+      }
+    }
 
     // Clear any prior "[price] …" note now that we have a real quote.
     const cleanedNotes = (await prisma.asset.findUnique({ where: { id: a.id }, select: { notes: true } }))?.notes;
     const notesNext = cleanedNotes && cleanedNotes.startsWith("[price] ") ? null : cleanedNotes;
 
+    // ─── INVARIANT ───────────────────────────────────────────────────────
+    // This update MUST NOT include `quantity`. For managed crypto, quantity
+    // is the wallet balance written by upsertManagedAsset and is the single
+    // source of truth. For manual quantity-based assets, quantity is owned
+    // by AssetTransaction position math. Touching it here would race both.
+    // ─────────────────────────────────────────────────────────────────────
     await prisma.$transaction([
       prisma.valuation.create({
         data: {
           userId: a.userId, assetId: a.id, date: today,
-          value: unitValue.toFixed(2),
+          value: storeValue.toFixed(2),
           quantity: a.quantity ?? null,
-          currency: quote.currency,
+          currency: storeCurrency,
           source: "PRICE_ADAPTER",
           note: `${usedSource}:${a.externalRef}`,
         },
@@ -85,8 +117,8 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
       prisma.asset.update({
         where: { id: a.id },
         data: {
-          currentValue: unitValue.toFixed(2),
-          currency: quote.currency,
+          currentValue: storeValue.toFixed(2),
+          currency: storeCurrency,
           lastPricedAt: new Date(),
           notes: notesNext,
         },
@@ -100,8 +132,8 @@ export async function refreshAssetPrice(assetId: string): Promise<AssetRefreshRe
     ]);
     return {
       status: "updated",
-      currentValue: unitValue.toFixed(2),
-      currency: quote.currency,
+      currentValue: storeValue.toFixed(2),
+      currency: storeCurrency,
       pricePerUnit: quote.price.toFixed(8),
     };
   } catch (e) {

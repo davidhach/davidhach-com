@@ -292,10 +292,26 @@ async function upsertManagedAsset(args: {
   });
   let assetId: string;
   if (existing) {
+    // For an existing managed CRYPTO row, do NOT overwrite currentValue/
+    // currency back to the placeholders ("0" / coin code) on every re-sync.
+    // refreshAssetPrice has already stored the value in the user's display
+    // currency; clobbering it here would flash "$0" until the next price
+    // fetch lands (and stay $0 if that fetch fails). Only quantity is
+    // wallet-authoritative and must be rewritten every sync.
+    const updateData = data.priceSource
+      ? {
+          // Crypto: keep the priced currentValue + currency; refresh quantity.
+          name: data.name,
+          assetClass: data.assetClass,
+          quantity: data.quantity,
+          priceSource: data.priceSource,
+          externalRef: data.externalRef,
+        }
+      : data; // CASH: currentValue IS the authoritative bank balance.
     await prisma.asset.update({
       where: { id: existing.id },
       data: {
-        ...data,
+        ...updateData,
         archived: false,
         finAccountId: link.finAccountId,
         entityId: fa.entityId,
@@ -316,8 +332,9 @@ async function upsertManagedAsset(args: {
     assetId = created.id;
   }
 
-  // For CRYPTO, fetch the live market price so currentValue isn't 0. CASH
-  // assets are already at their authoritative value (the bank balance).
+  // For CRYPTO, fetch the live market price so currentValue reflects today's
+  // market in the user's display currency. CASH assets are already at their
+  // authoritative value (the bank balance) — no extra pricing needed.
   if (data.priceSource && data.priceSource !== "manual") {
     await refreshAssetPrice(assetId).catch(() => {});
   }

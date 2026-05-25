@@ -34,6 +34,16 @@ export const POST = withAuth(async (userId, req) => {
   ]);
   if (!tx)    return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  // Refuse confirms against an auto-synced asset. The wallet balance is the
+  // source of truth for managed CRYPTO/CASH; running the position recompute
+  // here would overwrite Asset.quantity with the AssetTransaction ledger and
+  // zero out the real wallet reading until the next sync.
+  if (asset.managedByLinkId) {
+    return NextResponse.json(
+      { error: "This asset is auto-synced from a connection — buy/sell at the source, Ledger only reads." },
+      { status: 409 },
+    );
+  }
 
   const date = data.date ? new Date(data.date) : tx.date;
 
