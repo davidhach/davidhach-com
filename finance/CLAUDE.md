@@ -71,7 +71,19 @@ financial data — security and data integrity come before everything else.**
 - **GoCardless is legacy**. Adapter kept registered so existing rows continue to sync,
   but the Connect UI no longer offers it — GoCardless closed signups.
 - **ISIN → ticker** resolution uses OpenFIGI (free, no key required; `OPENFIGI_API_KEY`
-  raises the rate limit). Cached in `IsinMapping`. Resolver lives in `src/lib/isin-resolver.ts`.
+  raises the rate limit). Cached in `IsinMapping`. The resolver scores candidates by
+  preferred currency (huge weight), home exchange, and security type, then VALIDATES
+  by fetching a live Stooq quote — picks the first listing that actually returns one.
+  Without that, EUR ETFs were getting matched to LSE pence listings. Accepts an
+  optional `preferredCurrency` parameter; the new-asset form passes the user's currency.
+- **Stooq UK pence** handling: LSE quotes are in pence (GBp). `parseStooqCsv` multiplies
+  by `.unitScale` per suffix (UK = 0.01) and reports GBP, so values are always in major
+  units. Without this a 99-share holding showed £2.6M instead of £26k.
+- **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
+  a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
+  cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback
+  → return ok:false + reason. The dashboard renders a yellow banner listing affected
+  currencies. The daily cron also tops up any currency the user actually holds.
 - **Quantity-based assets** (STOCKS / CRYPTO with a non-manual `priceSource`): the
   authoritative ledger is `AssetTransaction` (BUY / SELL / TRANSFER_IN / SPLIT / DIVIDEND).
   `Asset.quantity` + `Asset.currentValue` are denormalised caches recomputed on every

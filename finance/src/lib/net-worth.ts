@@ -11,7 +11,7 @@
  */
 import { Decimal } from "decimal.js";
 import { prisma } from "./db";
-import { convert } from "./fx";
+import { convertSafe } from "./fx";
 
 export interface NetWorthBreakdown {
   asOf: Date;
@@ -23,6 +23,8 @@ export interface NetWorthBreakdown {
   byEntity: Record<string, { name: string; value: Decimal }>;
   assetCount: number;
   liabilityCount: number;
+  /** Currencies we couldn't convert today — shown as a dashboard banner. */
+  fxWarnings: string[];
 }
 
 export interface LiveOptions {
@@ -50,13 +52,20 @@ export async function liveNetWorth(userId: string, optsOrCcy?: LiveOptions | str
     assets, liabilities, entities,
     displayCurrency: ccy,
     asOf: today,
-    convert: (a, from) => convert({ amount: a, from, to: ccy, date: today }),
+    convert: async (a, from) => {
+      const r = await convertSafe({ amount: a, from, to: ccy, date: today });
+      return { amount: r.amount, ok: r.ok, reason: r.reason };
+    },
   });
 }
 
 /**
  * Pure aggregation step. Pulled out of liveNetWorth so it's unit-testable
  * without a database — feed it plain objects + a fake `convert`.
+ *
+ * The `convert` callback can return ok:false; the aggregate then drops that
+ * row from the converted totals and records the currency in `fxWarnings`. The
+ * dashboard renders a banner so the user sees what was excluded.
  */
 export async function aggregateNetWorth(input: {
   assets: Array<{ entityId: string; assetClass: string; currency: string; currentValue: { toString(): string } }>;
@@ -64,27 +73,36 @@ export async function aggregateNetWorth(input: {
   entities: Array<{ id: string; name: string }>;
   displayCurrency: string;
   asOf: Date;
-  convert: (amount: Decimal, from: string) => Promise<Decimal>;
+  convert: (amount: Decimal, from: string) => Promise<{ amount: Decimal; ok: boolean; reason?: string }> | Promise<Decimal>;
 }): Promise<NetWorthBreakdown> {
   const { assets, liabilities, entities, displayCurrency, asOf } = input;
   const byAssetClass: Record<string, Decimal> = {};
   const byEntity: Record<string, { name: string; value: Decimal }> = Object.fromEntries(
     entities.map((e) => [e.id, { name: e.name, value: new Decimal(0) }]),
   );
+  const fxFailedCurrencies = new Set<string>();
+
+  // Adapter for both shapes: pure Decimal (legacy callers + tests) and {amount, ok}.
+  const adapt = async (amt: Decimal, from: string) => {
+    const r = await input.convert(amt, from);
+    return Decimal.isDecimal(r) ? { amount: r as Decimal, ok: true } : (r as { amount: Decimal; ok: boolean });
+  };
 
   let totalAssets = new Decimal(0);
   for (const a of assets) {
-    const converted = await input.convert(new Decimal(a.currentValue.toString()), a.currency);
-    totalAssets = totalAssets.plus(converted);
-    byAssetClass[a.assetClass] = (byAssetClass[a.assetClass] ?? new Decimal(0)).plus(converted);
-    if (byEntity[a.entityId]) byEntity[a.entityId].value = byEntity[a.entityId].value.plus(converted);
+    const r = await adapt(new Decimal(a.currentValue.toString()), a.currency);
+    if (!r.ok) { fxFailedCurrencies.add(a.currency); continue; }
+    totalAssets = totalAssets.plus(r.amount);
+    byAssetClass[a.assetClass] = (byAssetClass[a.assetClass] ?? new Decimal(0)).plus(r.amount);
+    if (byEntity[a.entityId]) byEntity[a.entityId].value = byEntity[a.entityId].value.plus(r.amount);
   }
 
   let totalLiabilities = new Decimal(0);
   for (const l of liabilities) {
-    const converted = await input.convert(new Decimal(l.currentValue.toString()), l.currency);
-    totalLiabilities = totalLiabilities.plus(converted);
-    if (byEntity[l.entityId]) byEntity[l.entityId].value = byEntity[l.entityId].value.minus(converted);
+    const r = await adapt(new Decimal(l.currentValue.toString()), l.currency);
+    if (!r.ok) { fxFailedCurrencies.add(l.currency); continue; }
+    totalLiabilities = totalLiabilities.plus(r.amount);
+    if (byEntity[l.entityId]) byEntity[l.entityId].value = byEntity[l.entityId].value.minus(r.amount);
   }
 
   return {
@@ -97,6 +115,7 @@ export async function aggregateNetWorth(input: {
     byEntity,
     assetCount: assets.length,
     liabilityCount: liabilities.length,
+    fxWarnings: [...fxFailedCurrencies],
   };
 }
 

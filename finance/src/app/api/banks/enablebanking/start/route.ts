@@ -56,6 +56,8 @@ export const POST = withAuth(async (userId, req) => {
   });
 
   try {
+    // Surface signing/PEM failures with their precise message instead of
+    // the generic "Failed" the UI would otherwise show.
     const auth = await startAuth({
       aspspName: data.aspspName,
       aspspCountry: data.aspspCountry,

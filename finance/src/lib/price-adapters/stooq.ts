@@ -2,25 +2,46 @@
  * Stooq.com price feed. Free, no API key, returns CSV.
  *
  *   ref examples:
- *     "AAPL.US"     – Apple stock (NASDAQ)
- *     "SAP.DE"      – SAP AG (Xetra), price in EUR
- *     "MSFT.US"     – Microsoft
- *     "BTC.V"       – various
+ *     "AAPL.US"   – Apple stock (NASDAQ), price in USD.
+ *     "SAP.DE"    – SAP AG (Xetra), price in EUR.
+ *     "MEUD.UK"   – LSE listing, price returned in PENCE — we divide by 100
+ *                   and report GBP. This is the LSE convention on Stooq.
  *
- * NOTE on ISINs: Stooq does not accept ISINs directly. For ISIN-tagged assets,
- * users currently must enter the ticker too — the UI surfaces this as a
- * separate `externalRef` field. (Mapping ISIN → ticker requires a paid feed.)
- *
- * Stooq returns the price in the exchange's native currency. We hand back the
- * currency the exchange suffix implies so net-worth conversion is honest.
+ * Stooq returns the price in the exchange's native unit. The suffix table
+ * below tells us both the currency AND the unit scale to apply so the value
+ * we hand back is always in major units (GBP not GBp, EUR not EUR cents).
  */
 import { Decimal } from "decimal.js";
 import type { PriceQuote } from "./index";
 
-const SUFFIX_CCY: Record<string, string> = {
-  US: "USD", UK: "GBP", DE: "EUR", FR: "EUR", IT: "EUR", ES: "EUR", NL: "EUR", BE: "EUR",
-  CH: "CHF", JP: "JPY", HK: "HKD", AU: "AUD", CA: "CAD", PL: "PLN",
+// Each suffix maps to { currency, unitScale }. unitScale multiplies the raw
+// Stooq close — e.g. UK is 0.01 because LSE quotes are in pence.
+const SUFFIX: Record<string, { currency: string; unitScale: number }> = {
+  US: { currency: "USD", unitScale: 1 },
+  UK: { currency: "GBP", unitScale: 0.01 },
+  DE: { currency: "EUR", unitScale: 1 },
+  FR: { currency: "EUR", unitScale: 1 },
+  IT: { currency: "EUR", unitScale: 1 },
+  ES: { currency: "EUR", unitScale: 1 },
+  NL: { currency: "EUR", unitScale: 1 },
+  BE: { currency: "EUR", unitScale: 1 },
+  PT: { currency: "EUR", unitScale: 1 },
+  IE: { currency: "EUR", unitScale: 1 },
+  AT: { currency: "EUR", unitScale: 1 },
+  CH: { currency: "CHF", unitScale: 1 },
+  JP: { currency: "JPY", unitScale: 1 },
+  HK: { currency: "HKD", unitScale: 1 },
+  AU: { currency: "AUD", unitScale: 1 },
+  CA: { currency: "CAD", unitScale: 1 },
+  PL: { currency: "PLN", unitScale: 1 },
+  SG: { currency: "SGD", unitScale: 1 },
 };
+
+/** Currency code Stooq returns for a given suffix (or USD as fallback). Exported for the resolver's currency-preference ranking. */
+export function stooqCurrencyForSuffix(suffix?: string | null): string {
+  if (!suffix) return "USD";
+  return SUFFIX[suffix.toUpperCase()]?.currency ?? "USD";
+}
 
 export async function fetchStooq(ref: string): Promise<PriceQuote | null> {
   const cleaned = ref.trim().toUpperCase();
@@ -42,10 +63,14 @@ export function parseStooqCsv(text: string, ref: string): PriceQuote | null {
   const close = row[6];
   if (!dateStr || !close || close === "N/D") return null;
   const suffix = ref.includes(".") ? ref.split(".").pop()! : "US";
-  const currency = SUFFIX_CCY[suffix] ?? "USD";
+  const info = SUFFIX[suffix] ?? { currency: "USD", unitScale: 1 };
+  const raw = new Decimal(close);
+  // Reject obviously garbage values that would explode portfolios. Stooq
+  // occasionally returns weird negatives or zero on data hiccups.
+  if (raw.lte(0) || !raw.isFinite()) return null;
   return {
-    price: new Decimal(close),
-    currency,
+    price: info.unitScale === 1 ? raw : raw.mul(info.unitScale),
+    currency: info.currency,
     date: new Date(dateStr),
   };
 }

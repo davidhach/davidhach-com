@@ -13,7 +13,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { handle, ok } from "@/lib/api";
-import { convert } from "@/lib/fx";
+import { convertSafe } from "@/lib/fx";
 import { Decimal } from "decimal.js";
 import { startOfMonth, subMonths, format } from "date-fns";
 
@@ -51,7 +51,9 @@ export async function GET(req: NextRequest) {
     let totalIncome = new Decimal(0);
 
     for (const t of txs) {
-      const amount = await convert({ amount: t.amount.toString(), from: t.currency, to: ccy, date: t.date });
+      const conv = await convertSafe({ amount: t.amount.toString(), from: t.currency, to: ccy, date: t.date });
+      if (!conv.ok) continue; // skip rows we can't convert today
+      const amount = conv.amount;
       const isOutflow = amount.lt(0);
       const absAmt = amount.abs();
       const monthKey = format(t.date, "yyyy-MM");

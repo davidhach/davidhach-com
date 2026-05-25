@@ -8,7 +8,7 @@ import { NetWorthChart } from "@/components/net-worth-chart";
 import { AllocationPie } from "@/components/allocation-pie";
 import { EntityFilter } from "@/components/entity-filter";
 import { formatMoney, formatPercent, pctChange } from "@/lib/utils";
-import { convert } from "@/lib/fx";
+import { convertSafe } from "@/lib/fx";
 import { Decimal } from "decimal.js";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +67,9 @@ export default async function DashboardPage({
   const spendByCat  = new Map<string, Decimal>();
   const incomeByCat = new Map<string, Decimal>();
   for (const t of monthTxs) {
-    const conv = await convert({ amount: t.amount.toString(), from: t.currency, to: ccy, date: t.date });
+    const res = await convertSafe({ amount: t.amount.toString(), from: t.currency, to: ccy, date: t.date });
+    if (!res.ok) continue; // skip rows we can't convert; the breakdown banner already flags it
+    const conv = res.amount;
     if (conv.lt(0)) {
       const abs = conv.abs();
       monthSpend = monthSpend.plus(abs);
@@ -97,6 +99,13 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
+      {breakdown.fxWarnings.length > 0 && (
+        <div className="text-xs px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-700">
+          <strong>FX rate unavailable for:</strong> {breakdown.fxWarnings.join(", ")}.{" "}
+          Holdings in {breakdown.fxWarnings.length === 1 ? "that currency are" : "those currencies are"}{" "}
+          excluded from the converted total until rates load (cron retries daily and on demand).
+        </div>
+      )}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-muted flex items-center gap-2">

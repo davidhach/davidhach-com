@@ -14,7 +14,7 @@
  */
 import { Decimal } from "decimal.js";
 import { prisma } from "./db";
-import { convert } from "./fx";
+import { convertSafe } from "./fx";
 
 export type Range = "1D" | "7D" | "1M" | "3M" | "12M" | "custom";
 export type Scope = "total" | "entity" | "assetClass";
@@ -84,14 +84,14 @@ async function buildDailyFromValuations(args: BuildArgs): Promise<SeriesResult> 
     for (const a of assets) {
       const v = mostRecentAt(a.valuations, day);
       if (!v) continue;
-      const conv = await convert({ amount: v.value.toString(), from: a.currency, to: args.currency, date: day });
-      total = total.plus(conv);
+      const conv = await convertSafe({ amount: v.value.toString(), from: a.currency, to: args.currency, date: day });
+      if (conv.ok) total = total.plus(conv.amount); // skip on FX gap — don't 500 the chart
     }
     for (const l of liabilities) {
       const v = mostRecentAt(l.valuations, day);
       if (!v) continue;
-      const conv = await convert({ amount: v.value.toString(), from: l.currency, to: args.currency, date: day });
-      total = total.minus(conv);
+      const conv = await convertSafe({ amount: v.value.toString(), from: l.currency, to: args.currency, date: day });
+      if (conv.ok) total = total.minus(conv.amount);
     }
     series.push({ date: day.toISOString().slice(0, 10), value: total.toNumber() });
   }
@@ -129,8 +129,8 @@ async function buildFromSnapshots(args: BuildArgs): Promise<SeriesResult> {
     } else {
       raw = new Decimal(s.netWorth.toString());
     }
-    const conv = await convert({ amount: raw, from: s.currency, to: args.currency, date: s.date });
-    series.push({ date: s.date.toISOString().slice(0, 10), value: conv.toNumber() });
+    const conv = await convertSafe({ amount: raw, from: s.currency, to: args.currency, date: s.date });
+    series.push({ date: s.date.toISOString().slice(0, 10), value: conv.ok ? conv.amount.toNumber() : 0 });
   }
 
   return {

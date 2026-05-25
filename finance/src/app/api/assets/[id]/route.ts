@@ -4,6 +4,8 @@ import { requireUserId } from "@/lib/auth";
 import { assetInput, valuationInput } from "@/lib/validation";
 import { handle, ok, parseBody, HttpError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { refreshAssetPrice } from "@/lib/price-refresh";
+import { MANUAL_SOURCE } from "@/lib/price-adapters";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   return handle(async () => {
@@ -51,8 +53,23 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       return a;
     });
 
-    await recordAudit({ userId, action: "asset.update", targetType: "Asset", targetId: id, before, after, req });
-    return ok(after);
+    // If the pricing config changed (or the asset is priced and the user
+    // edited quantity), pull a live quote so currentValue reflects today's
+    // market — not whatever was cached before.
+    const priceConfigChanged =
+      (data.priceSource && data.priceSource !== before.priceSource) ||
+      (data.externalRef && data.externalRef !== before.externalRef) ||
+      (data.quantity && data.quantity !== (before.quantity?.toString() ?? null));
+    const isPriced = (data.priceSource ?? before.priceSource) &&
+      (data.priceSource ?? before.priceSource) !== MANUAL_SOURCE &&
+      (data.externalRef ?? before.externalRef);
+    if (isPriced && priceConfigChanged) {
+      await refreshAssetPrice(id);
+    }
+
+    const fresh = await prisma.asset.findUnique({ where: { id } });
+    await recordAudit({ userId, action: "asset.update", targetType: "Asset", targetId: id, before, after: fresh, req });
+    return ok(fresh);
   });
 }
 

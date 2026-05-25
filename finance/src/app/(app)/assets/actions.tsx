@@ -34,7 +34,7 @@ export function AssetsActions({ hasAssets }: { hasAssets: boolean }) {
   );
 }
 
-/** Per-row controls: refresh one asset's price, or delete (archive) it. */
+/** Per-row controls: edit, refresh one asset's price, or delete (archive) it. */
 export function AssetRowActions({ id, name, canRefresh }: { id: string; name: string; canRefresh: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"refresh" | "delete" | null>(null);
@@ -56,6 +56,11 @@ export function AssetRowActions({ id, name, canRefresh }: { id: string; name: st
 
   return (
     <div className="inline-flex items-center gap-1">
+      <a href={`/assets/${id}/edit`}
+        title="Edit every field of this asset"
+        className="px-2 py-1 rounded-md text-xs text-muted hover:bg-bg hover:text-fg">
+        Edit
+      </a>
       {canRefresh && (
         <button type="button" onClick={refresh} disabled={busy !== null}
           title="Pull a live price for this asset"

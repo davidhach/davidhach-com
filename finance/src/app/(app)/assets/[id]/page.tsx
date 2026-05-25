@@ -50,7 +50,10 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             )}
           </div>
         </div>
-        <Link href="/update"><Button variant="secondary">Update / trade</Button></Link>
+        <div className="flex gap-2">
+          <Link href={`/assets/${asset.id}/edit`}><Button variant="secondary">Edit</Button></Link>
+          <Link href="/update"><Button variant="secondary">BUY / SELL</Button></Link>
+        </div>
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

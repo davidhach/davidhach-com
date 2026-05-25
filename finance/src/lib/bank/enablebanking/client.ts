@@ -41,11 +41,40 @@ function appId(): string {
 }
 
 function privateKey(): string {
-  const v = process.env.ENABLE_BANKING_PRIVATE_KEY;
-  if (!v) throw new Error("ENABLE_BANKING_PRIVATE_KEY is not set");
-  // Vercel env vars frequently lose newlines if pasted as a single line —
-  // accept either real newlines or "\n"-escaped form.
-  return v.includes("\\n") ? v.replace(/\\n/g, "\n") : v;
+  const raw = process.env.ENABLE_BANKING_PRIVATE_KEY;
+  if (!raw) throw new Error("ENABLE_BANKING_PRIVATE_KEY is not set");
+  return normalizePem(raw);
+}
+
+/**
+ * Defensive normalisation for PEM env vars. Real-world Vercel pastes have a
+ * habit of arriving with literal "\\n", surrounding quotes, CRLF, or a BOM.
+ * We accept any of those and produce a clean PEM the Node crypto signer can
+ * parse. Throws a precise error if the result still doesn't look like a key.
+ *
+ * Exported for tests.
+ */
+export function normalizePem(raw: string): string {
+  let s = raw;
+  // Strip a UTF-8 BOM if present.
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+  // Trim outer whitespace.
+  s = s.trim();
+  // Strip a single layer of matching outer quotes.
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1);
+  }
+  // Convert escaped \n / \r sequences to real newlines.
+  if (s.includes("\\n")) s = s.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n");
+  // Normalise CRLF to LF.
+  s = s.replace(/\r\n?/g, "\n");
+  if (!s.includes("-----BEGIN") || !s.includes("-----END")) {
+    throw new Error(
+      "ENABLE_BANKING_PRIVATE_KEY does not look like a PEM (missing -----BEGIN/-----END). " +
+      "Paste the whole .pem file including the header and footer lines.",
+    );
+  }
+  return s;
 }
 
 export function isConfigured(): boolean {
@@ -67,8 +96,19 @@ export function signJwt(payload: object, kid: string, privateKeyPem: string): st
   const signer = createSign("RSA-SHA256");
   signer.update(data);
   signer.end();
-  const sig = b64url(signer.sign(privateKeyPem));
-  return `${data}.${sig}`;
+  let sigBuf: Buffer;
+  try {
+    sigBuf = signer.sign(privateKeyPem);
+  } catch (e) {
+    // Translate Node's cryptic OpenSSL errors into something the user can act on.
+    const msg = (e as Error).message ?? String(e);
+    throw new Error(
+      `RS256 signing failed (${msg}). Likely cause: ENABLE_BANKING_PRIVATE_KEY is malformed. ` +
+      `Paste the .pem file content as-is — Vercel preserves the newlines. ` +
+      `If you escaped newlines as \\n that's accepted too.`,
+    );
+  }
+  return `${data}.${b64url(sigBuf)}`;
 }
 
 function makeToken(): string {

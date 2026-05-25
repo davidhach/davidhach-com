@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateKeyPairSync, createVerify } from "node:crypto";
-import { signJwt } from "@/lib/bank/enablebanking/client";
+import { signJwt, normalizePem } from "@/lib/bank/enablebanking/client";
 
 // Generate a one-off RSA key pair for each test run so we don't ship a real key.
 function fixtureKeys() {
@@ -52,5 +52,60 @@ describe("Enable Banking JWT", () => {
     verifier.update(tampered);
     verifier.end();
     expect(verifier.verify(publicKey, sigBuf)).toBe(false);
+  });
+
+  it("surfaces a friendly error when the private key is malformed", () => {
+    expect(() => signJwt({ x: 1 }, "kid", "not a pem"))
+      .toThrow(/RS256 signing failed/);
+  });
+});
+
+describe("normalizePem", () => {
+  const { privateKey } = fixtureKeys();
+
+  it("returns a real PEM untouched", () => {
+    const out = normalizePem(privateKey);
+    expect(out).toContain("-----BEGIN");
+    expect(out).toContain("-----END");
+    expect(out.includes("\n")).toBe(true);
+  });
+
+  it("converts literal \\n into real newlines (Vercel single-line paste)", () => {
+    const escaped = privateKey.replace(/\n/g, "\\n");
+    const out = normalizePem(escaped);
+    expect(out).toBe(privateKey);
+  });
+
+  it("strips matching outer double quotes", () => {
+    const out = normalizePem(`"${privateKey}"`);
+    expect(out).toBe(privateKey);
+  });
+
+  it("normalises CRLF to LF", () => {
+    const crlf = privateKey.replace(/\n/g, "\r\n");
+    const out = normalizePem(crlf);
+    expect(out.trim()).toBe(privateKey.trim());
+    expect(out).not.toContain("\r");
+  });
+
+  it("strips a BOM", () => {
+    const out = normalizePem(`﻿${privateKey}`);
+    expect(out.trim()).toBe(privateKey.trim());
+    expect(out.charCodeAt(0)).toBe("-".charCodeAt(0));
+  });
+
+  it("rejects values that aren't PEMs with a precise error", () => {
+    expect(() => normalizePem("definitely not a key")).toThrow(/-----BEGIN/);
+  });
+
+  it("a normalised escaped-newline PEM still signs and verifies", () => {
+    const { privateKey: pk, publicKey } = fixtureKeys();
+    const escaped = pk.replace(/\n/g, "\\n");
+    const normalised = normalizePem(escaped);
+    const token = signJwt({ iss: "x" }, "k", normalised);
+    const [h, p, sig] = token.split(".");
+    const sigBuf = Buffer.from(sig.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((sig.length + 3) % 4), "base64");
+    const v = createVerify("RSA-SHA256"); v.update(`${h}.${p}`); v.end();
+    expect(v.verify(publicKey, sigBuf)).toBe(true);
   });
 });
