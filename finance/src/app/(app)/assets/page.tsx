@@ -14,7 +14,10 @@ export default async function AssetsPage() {
   const [assets, entities] = await Promise.all([
     prisma.asset.findMany({
       where: { userId, archived: false },
-      include: { entity: true, finAccount: true, category: true },
+      include: {
+        entity: true, finAccount: true, category: true,
+        managedByLink: { include: { connection: { select: { institutionName: true, provider: true } } } },
+      },
       orderBy: [{ assetClass: "asc" }, { name: "asc" }],
     }),
     prisma.entity.findMany({ where: { userId } }),
@@ -78,17 +81,32 @@ export default async function AssetsPage() {
                 const priceNote =
                   a.notes && a.notes.startsWith("[price] ") ? a.notes.slice(8) : null;
                 const looksLikeIsin = !!(a.symbol && /^[A-Z]{2}[A-Z0-9]{9}\d$/.test(a.symbol));
+                const isManaged = !!a.managedByLinkId;
                 const needsResolve =
-                  a.assetClass === "STOCKS" && looksLikeIsin &&
+                  !isManaged && a.assetClass === "STOCKS" && looksLikeIsin &&
                   (!a.priceSource || a.priceSource === "manual" || !a.externalRef);
                 const canRefresh = !!(a.priceSource && a.priceSource !== "manual" && a.externalRef);
                 const priceUnavailable = canRefresh && !!priceNote;
+                const managedSource = isManaged
+                  ? `${a.managedByLink?.connection.institutionName ?? a.managedByLink?.connection.provider ?? "connection"}`
+                  : null;
                 return (
                   <tr key={a.id}>
                     <td className="px-4 py-3">
-                      <Link href={`/assets/${a.id}`} className="font-medium hover:underline">{a.name}</Link>
-                      {a.symbol && <span className="text-muted ml-2 text-xs">{a.symbol}</span>}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link href={`/assets/${a.id}`} className="font-medium hover:underline">{a.name}</Link>
+                        {a.symbol && <span className="text-muted text-xs">{a.symbol}</span>}
+                        {isManaged && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-fg border border-accent/30"
+                            title="Auto-synced from a bank/crypto connection — not editable">
+                            🔒 auto-synced
+                          </span>
+                        )}
+                      </div>
                       {a.finAccount && <div className="text-xs text-muted">{a.finAccount.name}</div>}
+                      {isManaged && managedSource && (
+                        <div className="text-xs text-muted">From {managedSource} — disconnect to remove</div>
+                      )}
                       {a.priceSource && a.priceSource !== "manual" && a.externalRef && (
                         <div className="text-xs text-muted">
                           {a.priceSource}:{a.externalRef}
@@ -134,7 +152,8 @@ export default async function AssetsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <AssetRowActions id={a.id} name={a.name}
-                        canRefresh={canRefresh} needsResolve={needsResolve} />
+                        canRefresh={canRefresh} needsResolve={needsResolve}
+                        managed={isManaged} />
                     </td>
                   </tr>
                 );

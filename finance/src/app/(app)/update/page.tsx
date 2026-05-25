@@ -8,7 +8,9 @@ export default async function UpdatePage() {
   const userId = await requireUserId();
   const [assets, finAccounts] = await Promise.all([
     prisma.asset.findMany({
-      where: { userId, archived: false },
+      // Exclude auto-managed (connection-synced) assets — their value comes
+      // from the live sync and the user can't override it here.
+      where: { userId, archived: false, managedByLinkId: null },
       orderBy: [{ assetClass: "asc" }, { name: "asc" }],
       include: { entity: { select: { name: true } } },
     }),

@@ -28,6 +28,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
     const before = await prisma.asset.findFirst({ where: { id, userId } });
     if (!before) throw new HttpError(404, "Asset not found");
+    if (before.managedByLinkId) {
+      throw new HttpError(409, "This asset is auto-synced from a bank/crypto connection. Disconnect it under Settings → Connections to remove it.");
+    }
 
     const after = await prisma.$transaction(async (tx) => {
       const a = await tx.asset.update({
@@ -79,6 +82,9 @@ export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: stri
     const { id } = await ctx.params;
     const before = await prisma.asset.findFirst({ where: { id, userId } });
     if (!before) throw new HttpError(404, "Asset not found");
+    if (before.managedByLinkId) {
+      throw new HttpError(409, "This asset is auto-synced from a bank/crypto connection. Disconnect it under Settings → Connections to remove it.");
+    }
     // Soft delete via archive flag — preserves valuations & history.
     const after = await prisma.asset.update({ where: { id }, data: { archived: true } });
     await recordAudit({ userId, action: "asset.archive", targetType: "Asset", targetId: id, before, after, req });

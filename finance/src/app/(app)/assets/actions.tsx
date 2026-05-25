@@ -34,10 +34,12 @@ export function AssetsActions({ hasAssets }: { hasAssets: boolean }) {
   );
 }
 
-/** Per-row controls: edit, refresh / resolve price, or delete (archive) it. */
+/** Per-row controls: edit, refresh / resolve price, or delete (archive) it.
+ *  Auto-synced assets (managed = true) hide Edit + Delete — the only way to
+ *  remove them is to disconnect the underlying connection. Refresh stays. */
 export function AssetRowActions({
-  id, name, canRefresh, needsResolve,
-}: { id: string; name: string; canRefresh: boolean; needsResolve: boolean }) {
+  id, name, canRefresh, needsResolve, managed,
+}: { id: string; name: string; canRefresh: boolean; needsResolve: boolean; managed?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"refresh" | "resolve" | "delete" | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -68,11 +70,13 @@ export function AssetRowActions({
   return (
     <div className="inline-flex items-center gap-1">
       {msg && <span className="text-xs text-negative max-w-[180px] truncate" title={msg}>{msg}</span>}
-      <a href={`/assets/${id}/edit`}
-        title="Edit every field of this asset"
-        className="px-2 py-1 rounded-md text-xs text-muted hover:bg-bg hover:text-fg">
-        Edit
-      </a>
+      {!managed && (
+        <a href={`/assets/${id}/edit`}
+          title="Edit every field of this asset"
+          className="px-2 py-1 rounded-md text-xs text-muted hover:bg-bg hover:text-fg">
+          Edit
+        </a>
+      )}
       {needsResolve && (
         <button type="button" onClick={resolve} disabled={busy !== null}
           title="Look up this ISIN and attach a live price source"
@@ -87,11 +91,18 @@ export function AssetRowActions({
           {busy === "refresh" ? "…" : "↻"}
         </button>
       )}
-      <button type="button" onClick={del} disabled={busy !== null}
-        title="Delete (archive) this asset"
-        className="px-2 py-1 rounded-md text-xs text-negative hover:bg-negative/10 disabled:opacity-50">
-        {busy === "delete" ? "…" : "Delete"}
-      </button>
+      {!managed && (
+        <button type="button" onClick={del} disabled={busy !== null}
+          title="Delete (archive) this asset"
+          className="px-2 py-1 rounded-md text-xs text-negative hover:bg-negative/10 disabled:opacity-50">
+          {busy === "delete" ? "…" : "Delete"}
+        </button>
+      )}
+      {managed && (
+        <span className="text-xs text-muted px-1" title="Auto-synced — disconnect the linked connection to remove">
+          🔒
+        </span>
+      )}
     </div>
   );
 }

@@ -55,6 +55,12 @@ export const POST = withAuth(async (userId, req) => {
 
   const asset = await prisma.asset.findFirst({ where: { id: assetId, userId } });
   if (!asset) return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  if (asset.managedByLinkId) {
+    return NextResponse.json(
+      { error: "This asset is auto-synced from a connection. Move/sell at the source — Ledger only reads." },
+      { status: 409 },
+    );
+  }
 
   const data = await parseBody(req, input);
 

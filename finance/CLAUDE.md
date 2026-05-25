@@ -101,6 +101,17 @@ financial data — security and data integrity come before everything else.**
   (DEFAULT_CATEGORIES + DEFAULT_RULES in `src/lib/default-categories.ts`). Idempotent;
   also backfills uncategorised txns. New bank-synced txns auto-categorise via the
   existing `applyRulesToTransaction` hook in the orchestrator.
+- **Auto-managed Assets** from connections: every BankAccountLink produces one Asset
+  row (`Asset.managedByLinkId` FK, onDelete: Cascade). BANK → CASH at `lastBalance`,
+  `btc_address` → CRYPTO "Bitcoin" (coingecko: bitcoin), `eth_address` → CRYPTO
+  "Ethereum" (coingecko: ethereum). Upsert keyed on `managedByLinkId` so re-syncs
+  never duplicate. PATCH/DELETE on `/api/assets/[id]` and AssetTransaction POST
+  refuse with 409 for managed rows; the only way to remove one is to disconnect
+  the connection (the cascade tears the asset down). The /assets row + detail
+  page show a 🔒 auto-synced badge and hide Edit/Delete.
+- **ETH adapter** tries `ETH_RPC_URL` (if set) then publicnode → llamarpc → ankr,
+  each through `fetchWithTimeout(4s)`. Real RPC errors surface in the connection's
+  `lastError` instead of a generic 500. Wei→ETH via BigInt to keep sub-gwei precision.
 - **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
   a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
   cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback

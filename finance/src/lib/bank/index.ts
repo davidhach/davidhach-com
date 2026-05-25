@@ -10,7 +10,8 @@ import { prisma } from "../db";
 import { recordAudit } from "../audit";
 import { normalizeMerchant } from "../ocr";
 import { applyRulesToTransaction } from "../category-rules";
-import type { BankAdapter, AdapterTransaction } from "./types";
+import { refreshAssetPrice } from "../price-refresh";
+import type { BankAdapter, AdapterTransaction, AdapterBalance } from "./types";
 import { btcAdapter } from "./crypto/btc";
 import { ethAdapter } from "./crypto/eth";
 import { gocardlessAdapter } from "./gocardless/adapter";
@@ -79,6 +80,10 @@ export async function runSync(connectionId: string): Promise<SyncOutcome> {
         where: { id: link.id },
         data: { lastBalance: bal.amount.toFixed(2), lastBalanceAt: bal.asOf, currency: bal.currency },
       });
+      // Surface the balance as a real net-worth-counted Asset. This is what
+      // makes the dashboard reflect connected balances. Idempotent: matched by
+      // managedByLinkId, so re-syncs UPDATE the same Asset instead of dup'ing.
+      await upsertManagedAsset({ userId: conn.userId, provider: conn.provider, link, bal });
       balanceUpdates++;
     }
 
@@ -158,4 +163,113 @@ async function persistTransactions(
     inserted++;
   }
   return inserted;
+}
+
+// ─── Auto-managed asset from connection balance ────────────────────────────
+//
+// Each synced bank or crypto link produces one Asset row that net worth +
+// allocation count. Match key is (managedByLinkId) — unique-by-link — so a
+// second sync UPDATES the row instead of creating a duplicate.
+//
+// READ-ONLY for the user: PATCH and DELETE on /api/assets/[id] both refuse
+// when managedByLinkId is set. Deleting the connection (Cascade on the FK)
+// is the only way to remove the row.
+//
+// Conventions:
+//   - BTC address → CRYPTO "Bitcoin" asset, quantity = wallet BTC balance,
+//     priceSource = coingecko, externalRef = bitcoin → daily price refresh.
+//   - ETH address → same shape, "Ethereum" / externalRef "ethereum".
+//   - Bank account (Enable Banking / GoCardless / etc.) → CASH asset,
+//     currentValue = balance in the account's currency, no priceSource.
+async function upsertManagedAsset(args: {
+  userId: string;
+  provider: string;
+  link: { id: string; finAccountId: string; externalId: string; currency: string };
+  bal: AdapterBalance;
+}): Promise<void> {
+  const { userId, provider, link, bal } = args;
+  // Need the entity that owns the linked FinAccount.
+  const fa = await prisma.finAccount.findUnique({
+    where: { id: link.finAccountId },
+    select: { entityId: true, name: true },
+  });
+  if (!fa) return;
+
+  // Decide asset shape per provider.
+  let data: {
+    name: string;
+    assetClass: "CRYPTO" | "CASH";
+    currency: string;
+    quantity?: string;
+    currentValue: string;
+    priceSource: string | null;
+    externalRef: string | null;
+  };
+  if (provider === "btc_address") {
+    data = {
+      name: "Bitcoin",
+      assetClass: "CRYPTO",
+      currency: "BTC",
+      quantity: bal.amount.toFixed(10),
+      currentValue: "0",            // refreshAssetPrice below fills this in EUR/USD
+      priceSource: "coingecko",
+      externalRef: "bitcoin",
+    };
+  } else if (provider === "eth_address") {
+    data = {
+      name: "Ethereum",
+      assetClass: "CRYPTO",
+      currency: "ETH",
+      quantity: bal.amount.toFixed(10),
+      currentValue: "0",
+      priceSource: "coingecko",
+      externalRef: "ethereum",
+    };
+  } else {
+    // Bank / card connector. The balance IS the value, no extra pricing needed.
+    data = {
+      name: `${fa.name} cash`,
+      assetClass: "CASH",
+      currency: bal.currency,
+      currentValue: bal.amount.toFixed(2),
+      priceSource: null,
+      externalRef: null,
+    };
+  }
+
+  const existing = await prisma.asset.findFirst({
+    where: { userId, managedByLinkId: link.id },
+    select: { id: true },
+  });
+  let assetId: string;
+  if (existing) {
+    await prisma.asset.update({
+      where: { id: existing.id },
+      data: {
+        ...data,
+        archived: false,
+        finAccountId: link.finAccountId,
+        entityId: fa.entityId,
+      },
+    });
+    assetId = existing.id;
+  } else {
+    const created = await prisma.asset.create({
+      data: {
+        ...data,
+        userId,
+        entityId: fa.entityId,
+        finAccountId: link.finAccountId,
+        managedByLinkId: link.id,
+        notes: "[managed] Auto-synced from connection — disconnect to remove.",
+      },
+    });
+    assetId = created.id;
+  }
+
+  // For CRYPTO, fetch the live market price so currentValue isn't 0. CASH
+  // assets are already at their authoritative value (the bank balance).
+  if (data.priceSource && data.priceSource !== "manual") {
+    await refreshAssetPrice(assetId).catch(() => {});
+  }
 }

@@ -204,6 +204,10 @@ model Asset {
   lastPricedAt  DateTime?
   notes         String?
   archived      Boolean     @default(false)
+  // When set, this Asset is auto-managed by the bank/crypto connection at the
+  // linked BankAccountLink. The UI hides Edit/Delete and the API refuses
+  // direct mutations — the asset reflects whatever the live sync says.
+  managedByLinkId String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -212,6 +216,7 @@ model Asset {
   finAccount    FinAccount?       @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
   category      Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   customClass   AssetClassCustom? @relation(fields: [customClassId], references: [id], onDelete: SetNull)
+  managedByLink BankAccountLink?  @relation("ManagedAssets", fields: [managedByLinkId], references: [id], onDelete: Cascade)
   valuations    Valuation[]       @relation("AssetValuations")
   transactions  AssetTransaction[]
   tags          TagOnAsset[]
@@ -220,6 +225,7 @@ model Asset {
   @@index([entityId])
   @@index([assetClass])
   @@index([priceSource, lastPricedAt])
+  @@index([managedByLinkId])
 }
 
 // AssetTransaction = a BUY or SELL that adjusts an Asset's quantity. The
@@ -751,6 +757,7 @@ model BankAccountLink {
   user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   connection      BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   finAccount      FinAccount     @relation(fields: [finAccountId], references: [id], onDelete: Restrict)
+  managedAssets   Asset[]        @relation("ManagedAssets")
 
   @@unique([connectionId, externalId])
   @@index([userId])

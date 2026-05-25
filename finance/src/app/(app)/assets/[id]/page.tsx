@@ -18,6 +18,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     include: {
       entity: { select: { name: true } },
       finAccount: { select: { name: true } },
+      managedByLink: { include: { connection: { select: { institutionName: true, provider: true } } } },
       transactions: { orderBy: { date: "desc" } },
     },
   });
@@ -35,11 +36,23 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
     ? new Decimal(0)
     : currentValue.minus(summary.totalCost);
 
+  const managed = !!asset.managedByLinkId;
+  const managedSource = managed
+    ? asset.managedByLink?.connection.institutionName ?? asset.managedByLink?.connection.provider ?? "connection"
+    : null;
+
   return (
     <div className="space-y-5 max-w-4xl">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{asset.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            {asset.name}
+            {managed && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-fg border border-accent/30 font-normal">
+                🔒 auto-synced
+              </span>
+            )}
+          </h1>
           <div className="text-xs text-muted mt-1 flex flex-wrap items-center gap-2">
             <Badge>{asset.assetClass.toLowerCase().replace(/_/g, " ")}</Badge>
             {asset.symbol && <span>{asset.symbol}</span>}
@@ -49,11 +62,19 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
               <span>· {asset.priceSource}:{asset.externalRef}</span>
             )}
           </div>
+          {managed && (
+            <p className="text-xs text-muted mt-2 max-w-xl">
+              Auto-synced from <strong>{managedSource}</strong>. Value reflects the live balance —
+              not editable here. Disconnect under <Link href="/settings/banks" className="underline">Settings → Connections</Link> to remove.
+            </p>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Link href={`/assets/${asset.id}/edit`}><Button variant="secondary">Edit</Button></Link>
-          <Link href="/update"><Button variant="secondary">BUY / SELL</Button></Link>
-        </div>
+        {!managed && (
+          <div className="flex gap-2">
+            <Link href={`/assets/${asset.id}/edit`}><Button variant="secondary">Edit</Button></Link>
+            <Link href="/update"><Button variant="secondary">BUY / SELL</Button></Link>
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
