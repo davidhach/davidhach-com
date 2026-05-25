@@ -4,6 +4,8 @@ import { requireUserId } from "@/lib/auth";
 import { assetInput, valuationInput } from "@/lib/validation";
 import { handle, ok, parseBody, HttpError } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
+import { refreshAssetPrice } from "@/lib/price-refresh";
+import { MANUAL_SOURCE } from "@/lib/price-adapters";
 
 export async function GET() {
   return handle(async () => {
@@ -49,7 +51,18 @@ export async function POST(req: NextRequest) {
       return a;
     });
 
-    await recordAudit({ userId, action: "asset.create", targetType: "Asset", targetId: asset.id, after: asset, req });
-    return ok(asset, { status: 201 });
+    // If this asset is auto-priced, fetch the live quote NOW so the user sees a
+    // real market value immediately — don't wait for the daily cron. Best-effort:
+    // if the adapter is unreachable we still return the asset (with a note).
+    let priceRefresh: Awaited<ReturnType<typeof refreshAssetPrice>> | null = null;
+    if (data.priceSource && data.priceSource !== MANUAL_SOURCE && data.externalRef) {
+      priceRefresh = await refreshAssetPrice(asset.id);
+    }
+    const fresh = priceRefresh?.status === "updated"
+      ? await prisma.asset.findUnique({ where: { id: asset.id } })
+      : asset;
+
+    await recordAudit({ userId, action: "asset.create", targetType: "Asset", targetId: asset.id, after: { ...fresh, priceRefresh }, req });
+    return ok({ ...fresh, priceRefresh }, { status: 201 });
   });
 }

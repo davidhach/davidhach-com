@@ -106,10 +106,28 @@ function DisplayRow({ account: a, onEdit, onDeleted, onError }: {
           {a.institution && <span>· {a.institution}</span>}
         </div>
         <div className="text-xs text-muted mt-0.5">
-          {a.counts.transactions} txn · {a.counts.assets} asset · {a.counts.liabilities} liability · {a.counts.bankLinks} connection
+          {a.counts.transactions} txn · {a.counts.assets} asset · {a.counts.liabilities} liability ·{" "}
+          {a.counts.bankLinks > 0 ? (
+            <span className="text-positive">✓ {a.counts.bankLinks} connection{a.counts.bankLinks === 1 ? "" : "s"}</span>
+          ) : (
+            <span>0 connections</span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {a.counts.bankLinks === 0 ? (
+          <a href={`/settings/banks/new?finAccountId=${a.id}`}>
+            <Button variant="secondary" title="Attach a bank, crypto, or CSV connection to this account">
+              + Connect
+            </Button>
+          </a>
+        ) : (
+          <a href={`/settings/banks`}>
+            <Button variant="ghost" title="Manage existing connections">
+              Connections
+            </Button>
+          </a>
+        )}
         <Button variant="secondary" onClick={onEdit}>Edit</Button>
         <Button variant="destructive" onClick={del} disabled={busy}>{busy ? "…" : "Delete"}</Button>
       </div>

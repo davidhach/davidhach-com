@@ -32,21 +32,27 @@ export default async function BanksPage() {
   return (
     <div className="space-y-5 max-w-3xl">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Connected accounts</h1>
-        <Link href="/settings/banks/new"><Button>+ Connect</Button></Link>
+        <h1 className="text-2xl font-semibold tracking-tight">Data connections</h1>
+        <Link href="/settings/banks/new"><Button>+ Add connection</Button></Link>
       </header>
 
       <Card>
         <p className="text-xs text-muted mb-4">
-          Read-only by design. Ledger can never initiate a transfer from any connected account.
-          All syncs run on the daily cron; you can also refresh manually below.
+          A connection feeds data into one of your <Link href="/accounts" className="underline">accounts</Link>.
+          Read-only by design — Ledger can never initiate a transfer. Syncs run nightly; you can
+          also refresh manually below.
         </p>
 
         {connections.length === 0 ? (
-          <p className="text-sm text-muted">
-            No connected accounts yet. Add a bank via GoCardless, a public crypto address, or
-            upload a CSV statement.
-          </p>
+          <div className="text-center py-8 space-y-3">
+            <p className="text-sm text-muted">No connections yet.</p>
+            <p className="text-xs text-muted max-w-md mx-auto">
+              You can connect an <strong>EU bank</strong> (Sparkasse, Consors, N26 via PSD2),
+              a <strong>public crypto address</strong> (BTC/ETH balance), or upload a
+              <strong> CSV statement / depot</strong>.
+            </p>
+            <Link href="/settings/banks/new"><Button>Add your first connection</Button></Link>
+          </div>
         ) : (
           <ul className="divide-y divide-border">
             {connections.map((c) => (

@@ -30,11 +30,12 @@ export default async function SettingsPage() {
         </dl>
       </Card>
 
-      <Card>
+      <Card id="entities">
         <h2 className="font-medium text-sm mb-3">Entities</h2>
         <p className="text-xs text-muted mb-4">
-          An entity owns assets and liabilities. Use them to keep personal, company, or trust
-          balances separately and to filter the dashboard by entity.
+          An entity is the logical owner of assets and liabilities (e.g. &ldquo;Personal&rdquo;,
+          your company, a trust). Most users only need <strong>one</strong>. Each entity has
+          accounts, and each account holds assets / connections.
         </p>
         <EntitiesManager
           initial={entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, currency: e.currency }))}

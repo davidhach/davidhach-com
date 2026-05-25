@@ -164,6 +164,10 @@ export default function NewAssetPage() {
                   {isinState === "loading" ? "…" : "Resolve"}
                 </Button>
               </div>
+              <p className="text-xs text-muted">
+                12 characters (e.g. <code>US0378331005</code> for Apple, <code>DE0007164600</code> for SAP).
+                We look it up on OpenFIGI and pre-fill name + ticker.
+              </p>
               {isinMsg && (
                 <p className={`text-xs ${isinState === "ok" ? "text-positive" : isinState === "error" ? "text-negative" : "text-muted"}`}>
                   {isinMsg}
@@ -178,7 +182,10 @@ export default function NewAssetPage() {
               <Input value={externalRef} onChange={(e) => setExternalRef(e.target.value)}
                 placeholder={priced.refPlaceholder} required />
               <p className="text-xs text-muted mt-1">
-                Auto-priced daily from {priced.adapter}. currentValue = quantity × latest price.
+                {assetClass === "STOCKS" && <>Use the Stooq suffix: <code>.US</code> (NYSE/NASDAQ), <code>.DE</code> (Xetra), <code>.UK</code> (LSE), <code>.JP</code>, <code>.CH</code>, …</>}
+                {assetClass === "CRYPTO" && <>CoinGecko coin id — find it at <a href="https://www.coingecko.com" target="_blank" rel="noreferrer" className="underline">coingecko.com</a> (the URL slug, e.g. <code>bitcoin</code>).</>}
+                {assetClass === "COMMODITY" && <>Use <code>GOLD</code>, <code>SILVER</code>, <code>PLATINUM</code>, or <code>PALLADIUM</code>.</>}
+                {" "}Price refreshed daily and on demand. Value = quantity × latest price.
               </p>
             </div>
           )}
@@ -191,9 +198,17 @@ export default function NewAssetPage() {
 
           <div>
             <Label>Entity</Label>
-            <Select value={entityId} onChange={(e) => setEntityId(e.target.value)} required>
-              {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </Select>
+            <div className="flex gap-2 items-start">
+              <Select value={entityId} onChange={(e) => setEntityId(e.target.value)} required className="flex-1">
+                {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+              </Select>
+              <a href="/settings#entities" className="text-xs px-2 py-1.5 rounded-md border border-border hover:bg-bg whitespace-nowrap text-muted">
+                + New
+              </a>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              An entity is a logical owner (e.g. &ldquo;Personal&rdquo;, &ldquo;Holding GmbH&rdquo;).
+            </p>
           </div>
 
           {priced ? (

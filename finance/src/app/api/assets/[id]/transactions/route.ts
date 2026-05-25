@@ -10,6 +10,7 @@ import { z } from "zod";
 import { Decimal } from "decimal.js";
 import { prisma } from "@/lib/db";
 import { withAuth } from "@/lib/require-auth";
+import { refreshAssetPrice } from "@/lib/price-refresh";
 import { parseBody } from "@/lib/api";
 import { recordAudit } from "@/lib/audit";
 import { isoDate, moneyString, currency as currencyField } from "@/lib/validation";
@@ -140,6 +141,12 @@ export const POST = withAuth(async (userId, req) => {
 
     return at;
   });
+
+  // After the position recompute, pull a live market price so currentValue
+  // reflects today's market — not just qty × this trade's price. Best-effort.
+  if (asset.priceSource && asset.priceSource !== "manual" && asset.externalRef) {
+    await refreshAssetPrice(assetId);
+  }
 
   await recordAudit({
     userId, action: "asset.transaction.create", targetType: "AssetTransaction", targetId: created.id,

@@ -1,53 +1,172 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
 type Mode = "pick" | "gocardless" | "btc" | "eth" | "csv" | "depot";
 
-interface FinAccount { id: string; name: string; currency: string; kind: string }
+interface FinAccount { id: string; name: string; currency: string; kind: string; entityId: string }
+interface Entity { id: string; name: string; currency: string }
 interface Institution { id: string; name: string; bic: string | null; transactionDays: string | null }
 
-export function NewBankClient({ finAccounts }: { finAccounts: FinAccount[] }) {
-  const [mode, setMode] = useState<Mode>("pick");
+interface Props {
+  finAccounts: FinAccount[];
+  entities: Entity[];
+  preselectedAccountId: string | null;
+  preselectedMode: string | null;
+  gocardlessConfigured: boolean;
+}
 
-  if (finAccounts.length === 0) {
+const VALID_MODES: Mode[] = ["pick", "gocardless", "btc", "eth", "csv", "depot"];
+
+export function NewBankClient({ finAccounts, entities, preselectedAccountId, preselectedMode, gocardlessConfigured }: Props) {
+  const initialMode: Mode =
+    preselectedMode && VALID_MODES.includes(preselectedMode as Mode) ? (preselectedMode as Mode) : "pick";
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [accounts, setAccounts] = useState<FinAccount[]>(finAccounts);
+
+  function onAccountCreated(a: FinAccount) {
+    setAccounts((prev) => [...prev, a]);
+  }
+
+  // No accounts AND no entities yet → biggest first-time path: guide them.
+  if (accounts.length === 0 && entities.length === 0) {
     return (
       <div className="space-y-3 text-center py-6">
         <p className="text-sm text-muted">
-          You need an <strong>account</strong> first — a connection always links to one of your
-          financial accounts (e.g. your Sparkasse checking) so transactions and balances have
-          somewhere to live.
+          You don&apos;t have any <strong>entities</strong> or <strong>accounts</strong> yet —
+          a connection always belongs to an account, and accounts belong to entities.
         </p>
-        <a href="/accounts">
-          <Button>Add an account</Button>
-        </a>
+        <p className="text-xs text-muted">
+          Start with an entity (e.g. &ldquo;Personal&rdquo;) in Settings, then create an account
+          (e.g. &ldquo;Sparkasse Checking&rdquo;), then come back here to connect a data source.
+        </p>
+        <a href="/settings"><Button>Go to Settings → Entities</Button></a>
       </div>
     );
   }
 
-  if (mode === "pick") return <ProviderPicker onPick={setMode} />;
-  if (mode === "gocardless") return <GoCardlessFlow onBack={() => setMode("pick")} />;
+  // Entities exist but no account → inline-create one without leaving the page.
+  if (accounts.length === 0) {
+    return (
+      <InlineAccountCreate
+        entities={entities}
+        onCreated={onAccountCreated}
+      />
+    );
+  }
+
+  if (mode === "pick") return <ProviderPicker onPick={setMode} gocardlessConfigured={gocardlessConfigured} />;
+  if (mode === "gocardless") {
+    return gocardlessConfigured
+      ? <GoCardlessFlow onBack={() => setMode("pick")} />
+      : <GoCardlessNotConfigured onBack={() => setMode("pick")} />;
+  }
   if (mode === "btc" || mode === "eth") {
     return <CryptoForm provider={mode === "btc" ? "btc_address" : "eth_address"}
-      finAccounts={finAccounts} onBack={() => setMode("pick")} />;
+      finAccounts={accounts} entities={entities}
+      preselectedAccountId={preselectedAccountId}
+      onCreateAccount={onAccountCreated}
+      onBack={() => setMode("pick")} />;
   }
-  if (mode === "csv") return <CsvFlow finAccounts={finAccounts} onBack={() => setMode("pick")} />;
-  return <DepotCsvFlow finAccounts={finAccounts} onBack={() => setMode("pick")} />;
+  if (mode === "csv") {
+    return <CsvFlow finAccounts={accounts} entities={entities}
+      preselectedAccountId={preselectedAccountId}
+      onCreateAccount={onAccountCreated}
+      onBack={() => setMode("pick")} />;
+  }
+  return <DepotCsvFlow finAccounts={accounts} entities={entities}
+    onBack={() => setMode("pick")} />;
 }
 
-function ProviderPicker({ onPick }: { onPick: (m: Mode) => void }) {
-  const items: Array<{ id: Mode; title: string; desc: string }> = [
-    { id: "gocardless", title: "EU bank (Sparkasse, Consors, N26, …)",
-      desc: "Connect via GoCardless Bank Account Data. Read-only PSD2 / open-banking access, free tier. 90-day re-consent." },
-    { id: "btc", title: "Bitcoin address",
-      desc: "Track a public BTC address's balance via mempool.space. No private keys, no transactions written." },
-    { id: "eth", title: "Ethereum address",
-      desc: "Track a public ETH address's balance via a public RPC. Read-only." },
-    { id: "csv", title: "Upload CSV statement",
-      desc: "Import transactions from a bank-exported CSV. Works as a universal fallback." },
-    { id: "depot", title: "Broker depot (positions CSV)",
-      desc: "Import current holdings from your broker's depot export (Comdirect, Consors, etc.). PSD2 cannot expose depot positions, so CSV is the realistic path." },
+// ─── Inline help block ─────────────────────────────────────────────────────
+
+function HelpBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-xs bg-bg border border-border rounded-lg p-3 text-muted space-y-1">
+      {children}
+    </div>
+  );
+}
+
+// ─── Inline account create ─────────────────────────────────────────────────
+
+function InlineAccountCreate({ entities, onCreated }: {
+  entities: Entity[]; onCreated: (a: FinAccount) => void;
+}) {
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState("CHECKING");
+  const [currency, setCurrency] = useState(entities[0]?.currency ?? "EUR");
+  const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true); setError(null);
+    const res = await fetch("/api/accounts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, kind, currency, entityId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) onCreated({ id: data.id, name, kind, currency, entityId });
+    else setError(data.error ?? "Save failed");
+  }
+
+  return (
+    <div className="space-y-3">
+      <HelpBox>
+        First, create the <strong>account</strong> the connection will feed. Most users start
+        with their primary checking account.
+      </HelpBox>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label>Name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sparkasse Checking" autoFocus />
+        </div>
+        <div>
+          <Label>Kind</Label>
+          <Select value={kind} onChange={(e) => setKind(e.target.value)}>
+            {["CHECKING", "SAVINGS", "BROKERAGE", "CRYPTO_WALLET", "CREDIT_CARD", "RETIREMENT", "CASH", "OTHER"]
+              .map((k) => <option key={k} value={k}>{k.toLowerCase().replace(/_/g, " ")}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label>Currency</Label>
+          <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className="uppercase" />
+        </div>
+        <div>
+          <Label>Entity</Label>
+          <Select value={entityId} onChange={(e) => setEntityId(e.target.value)}>
+            {entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </Select>
+        </div>
+      </div>
+      {error && <p className="text-xs text-negative">{error}</p>}
+      <Button onClick={save} disabled={busy || !name.trim() || !entityId}>
+        {busy ? "Creating…" : "Create account & continue"}
+      </Button>
+    </div>
+  );
+}
+
+// ─── Provider picker ───────────────────────────────────────────────────────
+
+function ProviderPicker({ onPick, gocardlessConfigured }: {
+  onPick: (m: Mode) => void; gocardlessConfigured: boolean;
+}) {
+  const items: Array<{ id: Mode; title: string; desc: string; badge?: string }> = [
+    { id: "gocardless", title: "EU bank — automatic daily sync",
+      desc: "Connect Sparkasse, Consors, N26 or ~2,500 EU banks via GoCardless (read-only PSD2). Balances and transactions pulled daily and on demand.",
+      badge: gocardlessConfigured ? undefined : "needs setup" },
+    { id: "btc", title: "Bitcoin address (balance only)",
+      desc: "Paste a public BTC address. We read its balance from mempool.space daily. No private keys ever leave you." },
+    { id: "eth", title: "Ethereum address (balance only)",
+      desc: "Paste a public ETH address. Read via a public RPC. No private keys, no transactions written." },
+    { id: "csv", title: "Bank transactions CSV (one-time import)",
+      desc: "Upload a transactions export from any bank or card. Each row becomes a Transaction. Best when the bank isn't on GoCardless." },
+    { id: "depot", title: "Broker depot CSV (positions)",
+      desc: "Upload a positions export from your broker (Comdirect, Consors, Trade Republic). Each row becomes an Asset with its quantity. PSD2 doesn't expose depots — this is the realistic path." },
   ];
   return (
     <ul className="space-y-2">
@@ -55,7 +174,14 @@ function ProviderPicker({ onPick }: { onPick: (m: Mode) => void }) {
         <li key={i.id}>
           <button type="button" onClick={() => onPick(i.id)}
             className="w-full text-left border border-border rounded-xl px-4 py-3 hover:bg-bg transition">
-            <div className="font-medium text-sm">{i.title}</div>
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-sm">{i.title}</div>
+              {i.badge && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-700 border border-yellow-500/30">
+                  {i.badge}
+                </span>
+              )}
+            </div>
             <div className="text-xs text-muted mt-0.5">{i.desc}</div>
           </button>
         </li>
@@ -63,6 +189,44 @@ function ProviderPicker({ onPick }: { onPick: (m: Mode) => void }) {
     </ul>
   );
 }
+
+// ─── GoCardless not-configured ─────────────────────────────────────────────
+
+function GoCardlessNotConfigured({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="space-y-3">
+      <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      <h2 className="font-medium">GoCardless isn&apos;t configured yet</h2>
+      <p className="text-sm text-muted">
+        EU bank sync uses GoCardless Bank Account Data (free tier, ~2,500 banks). It needs two
+        environment variables set in your Vercel project. One-time setup, takes ~5 minutes.
+      </p>
+      <ol className="text-sm space-y-2 list-decimal pl-5">
+        <li>
+          Register at{" "}
+          <a href="https://bankaccountdata.gocardless.com/" target="_blank" rel="noreferrer" className="underline text-accent">
+            bankaccountdata.gocardless.com
+          </a>{" "}
+          and verify your email (free, no card).
+        </li>
+        <li>In <em>User secrets</em>, click <em>Create new</em>. Copy the <code>secret_id</code> and <code>secret_key</code>.</li>
+        <li>
+          In your Vercel project (Settings → Environment Variables) add:
+          <pre className="bg-bg border border-border rounded-lg p-2 mt-1 text-xs">
+GOCARDLESS_SECRET_ID = &lt;your secret_id&gt;
+GOCARDLESS_SECRET_KEY = &lt;your secret_key&gt;
+          </pre>
+        </li>
+        <li>Redeploy (or push any commit). Come back to this page — the EU-bank flow will be available.</li>
+      </ol>
+      <p className="text-xs text-muted">
+        Until then, you can still use Bitcoin / Ethereum / CSV connectors above. They don&apos;t need any setup.
+      </p>
+    </div>
+  );
+}
+
+// ─── GoCardless flow ───────────────────────────────────────────────────────
 
 function GoCardlessFlow({ onBack }: { onBack: () => void }) {
   const [country, setCountry] = useState("DE");
@@ -99,6 +263,11 @@ function GoCardlessFlow({ onBack }: { onBack: () => void }) {
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      <HelpBox>
+        Pick your bank below. You&apos;ll be redirected to your bank&apos;s consent page to authorize
+        read-only access. <strong>Ledger can never initiate a transfer</strong> — this is PSD2
+        AIS, not PIS. After consent we&apos;ll show your accounts so you can pick which to link.
+      </HelpBox>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Country</Label>
@@ -133,21 +302,29 @@ function GoCardlessFlow({ onBack }: { onBack: () => void }) {
   );
 }
 
-function CryptoForm({ provider, finAccounts, onBack }: {
-  provider: "btc_address" | "eth_address"; finAccounts: FinAccount[]; onBack: () => void;
+// ─── Crypto address form ───────────────────────────────────────────────────
+
+function CryptoForm({
+  provider, finAccounts, entities, preselectedAccountId, onCreateAccount, onBack,
+}: {
+  provider: "btc_address" | "eth_address";
+  finAccounts: FinAccount[]; entities: Entity[];
+  preselectedAccountId: string | null;
+  onCreateAccount: (a: FinAccount) => void;
+  onBack: () => void;
 }) {
+  const router = useRouter();
   const [address, setAddress] = useState("");
-  const [finAccountId, setFinAccountId] = useState(finAccounts[0]?.id ?? "");
+  const [finAccountId, setFinAccountId] = useState(preselectedAccountId ?? finAccounts[0]?.id ?? "");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   async function save() {
     setBusy(true); setError(null);
     const res = await fetch("/api/banks/crypto", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ provider, address: address.trim(), finAccountId, label: label.trim() || undefined }),
     });
     const data = await res.json();
@@ -156,42 +333,77 @@ function CryptoForm({ provider, finAccounts, onBack }: {
     else setError(data.error ?? "Failed");
   }
 
+  const isBtc = provider === "btc_address";
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      <HelpBox>
+        Paste only your <strong>public</strong> {isBtc ? "BTC" : "ETH"} address. We can&apos;t spend
+        from it — we only read its balance.{" "}
+        {isBtc
+          ? <>In most wallets: <em>Receive</em> → copy the address starting with <code>bc1</code> or <code>1</code>.</>
+          : <>In MetaMask/Ledger: click your account name to copy the <code>0x…</code> address.</>}
+        {" "}<strong>Never paste a seed phrase or private key.</strong>
+      </HelpBox>
       <div>
-        <Label>{provider === "btc_address" ? "Bitcoin address (public)" : "Ethereum address (public)"}</Label>
+        <Label>{isBtc ? "Bitcoin address (public)" : "Ethereum address (public)"}</Label>
         <Input value={address} onChange={(e) => setAddress(e.target.value)}
-          placeholder={provider === "btc_address" ? "bc1q…" : "0x…"} autoFocus />
-        <p className="text-xs text-muted mt-1">Public address only. Never paste a private key or seed phrase.</p>
+          placeholder={isBtc ? "bc1q…" : "0x…"} autoFocus />
       </div>
       <div>
-        <Label>Map to financial account</Label>
-        <Select value={finAccountId} onChange={(e) => setFinAccountId(e.target.value)}>
-          {finAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </Select>
+        <Label>Account to map this to</Label>
+        <div className="flex gap-2 items-start">
+          <Select value={finAccountId} onChange={(e) => setFinAccountId(e.target.value)} className="flex-1">
+            {finAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+          <button type="button" onClick={() => setCreatingAccount((v) => !v)}
+            className="text-xs px-2 py-1 rounded-md border border-border hover:bg-bg whitespace-nowrap">
+            {creatingAccount ? "Cancel" : "+ New account"}
+          </button>
+        </div>
+        <p className="text-xs text-muted mt-1">
+          The balance shows up under this account. Create a dedicated &ldquo;BTC Wallet&rdquo; / &ldquo;ETH Wallet&rdquo;
+          account if you don&apos;t have one.
+        </p>
       </div>
+      {creatingAccount && (
+        <InlineAccountCreate entities={entities}
+          onCreated={(a) => { onCreateAccount(a); setFinAccountId(a.id); setCreatingAccount(false); }} />
+      )}
       <div>
         <Label>Label (optional)</Label>
         <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Cold wallet, Ledger Nano, …" />
       </div>
       {error && <p className="text-xs text-negative">{error}</p>}
       <Button onClick={save} disabled={busy || !address.trim() || !finAccountId}>
-        {busy ? "Saving…" : "Save & fetch balance"}
+        {busy ? "Saving…" : "Save & fetch balance now"}
       </Button>
     </div>
   );
 }
 
+// ─── Bank-transactions CSV flow ────────────────────────────────────────────
+
 interface ParsedRow { date: string; amount: string; currency: string; description: string; merchant?: string }
 
-function CsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: () => void }) {
-  const [finAccountId, setFinAccountId] = useState(finAccounts[0]?.id ?? "");
-  const [currency, setCurrency] = useState(finAccounts[0]?.currency ?? "EUR");
+function CsvFlow({
+  finAccounts, entities, preselectedAccountId, onCreateAccount, onBack,
+}: {
+  finAccounts: FinAccount[]; entities: Entity[];
+  preselectedAccountId: string | null;
+  onCreateAccount: (a: FinAccount) => void;
+  onBack: () => void;
+}) {
+  const preferred = preselectedAccountId
+    ? finAccounts.find((a) => a.id === preselectedAccountId)
+    : finAccounts[0];
+  const [finAccountId, setFinAccountId] = useState(preferred?.id ?? "");
+  const [currency, setCurrency] = useState(preferred?.currency ?? "EUR");
   const [preview, setPreview] = useState<{ rows: ParsedRow[]; warnings: string[]; fileName: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ inserted: number; duplicates: number } | null>(null);
+  const [creatingAccount, setCreatingAccount] = useState(false);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -211,8 +423,7 @@ function CsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: (
     if (!preview) return;
     setBusy(true); setError(null);
     const res = await fetch("/api/banks/csv/commit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ finAccountId, rows: preview.rows }),
     });
     const data = await res.json();
@@ -224,27 +435,48 @@ function CsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: (
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
+      <HelpBox>
+        <p><strong>What gets imported:</strong> bank transactions (date, amount, description, merchant). Each row becomes a Transaction in the account you pick.</p>
+        <p><strong>How to export:</strong></p>
+        <ul className="list-disc pl-4 space-y-0.5">
+          <li><strong>Sparkasse:</strong> Online-Banking → Umsätze → Filter date range → <em>Download</em> → CSV-CAMT format.</li>
+          <li><strong>Consors:</strong> Konten → Umsätze → date range → <em>Export</em> → CSV.</li>
+          <li><strong>N26:</strong> Statements → choose month → <em>CSV download</em>.</li>
+          <li><strong>Other:</strong> any CSV with date, amount, description columns works.</li>
+        </ul>
+        <p>Duplicates are detected and skipped automatically.</p>
+      </HelpBox>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Financial account</Label>
-          <Select value={finAccountId} onChange={(e) => {
-            setFinAccountId(e.target.value);
-            const a = finAccounts.find((x) => x.id === e.target.value);
-            if (a) setCurrency(a.currency);
-          }}>
-            {finAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </Select>
+          <Label>Account</Label>
+          <div className="flex gap-2 items-start">
+            <Select value={finAccountId} onChange={(e) => {
+              setFinAccountId(e.target.value);
+              const a = finAccounts.find((x) => x.id === e.target.value);
+              if (a) setCurrency(a.currency);
+            }} className="flex-1">
+              {finAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </Select>
+            <button type="button" onClick={() => setCreatingAccount((v) => !v)}
+              className="text-xs px-2 py-1 rounded-md border border-border hover:bg-bg whitespace-nowrap">
+              {creatingAccount ? "Cancel" : "+ New"}
+            </button>
+          </div>
         </div>
         <div>
-          <Label>Default currency</Label>
+          <Label>Default currency (if not in CSV)</Label>
           <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} className="uppercase" />
         </div>
       </div>
+      {creatingAccount && (
+        <InlineAccountCreate entities={entities}
+          onCreated={(a) => { onCreateAccount(a); setFinAccountId(a.id); setCurrency(a.currency); setCreatingAccount(false); }} />
+      )}
       <div>
         <Label>CSV file</Label>
         <input type="file" accept=".csv,text/csv" onChange={onFile}
           className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-card file:px-3 file:py-1.5 file:text-sm" />
-        <p className="text-xs text-muted mt-1">Comma or semicolon. Headers auto-detected (German + English).</p>
+        <p className="text-xs text-muted mt-1">Comma or semicolon. German + English headers auto-detected.</p>
       </div>
       {error && <p className="text-xs text-negative">{error}</p>}
       {busy && <p className="text-xs text-muted">Working…</p>}
@@ -288,23 +520,20 @@ function CsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: (
   );
 }
 
+// ─── Broker depot CSV flow ─────────────────────────────────────────────────
+
 interface DepotRow { isin?: string; ticker?: string; name: string; quantity: string; avgPrice?: string; currency: string }
 
-function DepotCsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBack: () => void }) {
+function DepotCsvFlow({ finAccounts, entities, onBack }: {
+  finAccounts: FinAccount[]; entities: Entity[]; onBack: () => void;
+}) {
   const [finAccountId, setFinAccountId] = useState(finAccounts[0]?.id ?? "");
   const [currency, setCurrency] = useState(finAccounts[0]?.currency ?? "EUR");
-  const [entities, setEntities] = useState<Array<{ id: string; name: string }>>([]);
-  const [entityId, setEntityId] = useState<string>("");
+  const [entityId, setEntityId] = useState<string>(entities[0]?.id ?? "");
   const [preview, setPreview] = useState<{ rows: DepotRow[]; warnings: string[]; fileName: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ created: number; reused: number; trades: number } | null>(null);
-
-  useEffect(() => {
-    fetch("/api/entities").then((r) => r.json()).then((es) => {
-      setEntities(es); if (es[0]) setEntityId(es[0].id);
-    });
-  }, []);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -335,11 +564,17 @@ function DepotCsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBa
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
-      <p className="text-xs text-muted">
-        Export your depot positions from your broker (Comdirect, Consors, Trade Republic, …) and
-        upload the CSV here. We&apos;ll create or update one Asset per row and record an opening
-        transfer-in. Daily prices come from the auto-priced cron afterwards.
-      </p>
+      <HelpBox>
+        <p><strong>What gets imported:</strong> your current depot positions (one stock/ETF per row). Each row creates or finds an Asset with its quantity and average price.</p>
+        <p><strong>How to export:</strong></p>
+        <ul className="list-disc pl-4 space-y-0.5">
+          <li><strong>Comdirect:</strong> Depot → Bestand → <em>Drucken/Export</em> → CSV.</li>
+          <li><strong>Consors:</strong> Depot → Bestand → <em>Export als CSV</em>.</li>
+          <li><strong>Trade Republic:</strong> Profile → Activity → <em>Export</em> (CSV) — pick positions/portfolio.</li>
+          <li><strong>Other:</strong> any CSV with ISIN/name and quantity columns works.</li>
+        </ul>
+        <p>If ISINs are present we resolve them to tickers automatically (OpenFIGI) and pull a live price.</p>
+      </HelpBox>
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>Entity</Label>
@@ -367,7 +602,6 @@ function DepotCsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBa
         <Label>Depot CSV file</Label>
         <input type="file" accept=".csv,text/csv" onChange={onFile}
           className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-card file:px-3 file:py-1.5 file:text-sm" />
-        <p className="text-xs text-muted mt-1">Comma or semicolon. Auto-detects ISIN / name / quantity / cost columns.</p>
       </div>
       {error && <p className="text-xs text-negative">{error}</p>}
       {busy && <p className="text-xs text-muted">Working…</p>}
@@ -408,7 +642,7 @@ function DepotCsvFlow({ finAccounts, onBack }: { finAccounts: FinAccount[]; onBa
       )}
       {result && (
         <p className="text-sm text-positive">
-          {result.created} new asset{result.created === 1 ? "" : "s"} created · {result.reused} matched existing · {result.trades} transfer-in record{result.trades === 1 ? "" : "s"} added.
+          {result.created} new asset{result.created === 1 ? "" : "s"} created · {result.reused} matched existing · {result.trades} record{result.trades === 1 ? "" : "s"} added.
         </p>
       )}
     </div>
