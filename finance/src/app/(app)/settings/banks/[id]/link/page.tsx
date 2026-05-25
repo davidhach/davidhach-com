@@ -11,8 +11,8 @@ export default async function LinkPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const [conn, finAccounts] = await Promise.all([
     prisma.bankConnection.findFirst({
-      where: { id, userId, provider: "gocardless" },
-      select: { id: true, institutionName: true, status: true },
+      where: { id, userId, provider: { in: ["enablebanking", "gocardless"] } },
+      select: { id: true, institutionName: true, status: true, provider: true },
     }),
     prisma.finAccount.findMany({
       where: { userId, archived: false },
@@ -30,7 +30,7 @@ export default async function LinkPage({ params }: { params: Promise<{ id: strin
           Pick which detected accounts to link to your Ledger financial accounts. Only linked
           accounts are synced — you can leave others unlinked.
         </p>
-        <LinkClient connectionId={conn.id} finAccounts={finAccounts} />
+        <LinkClient connectionId={conn.id} provider={conn.provider} finAccounts={finAccounts} />
       </Card>
     </div>
   );

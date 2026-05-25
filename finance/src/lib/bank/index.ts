@@ -14,11 +14,15 @@ import type { BankAdapter, AdapterTransaction } from "./types";
 import { btcAdapter } from "./crypto/btc";
 import { ethAdapter } from "./crypto/eth";
 import { gocardlessAdapter } from "./gocardless/adapter";
+import { enableBankingAdapter } from "./enablebanking/adapter";
 
 const REGISTRY: Record<string, BankAdapter> = {
-  btc_address: btcAdapter,
-  eth_address: ethAdapter,
-  gocardless:  gocardlessAdapter,
+  btc_address:    btcAdapter,
+  eth_address:    ethAdapter,
+  enablebanking:  enableBankingAdapter,
+  // gocardless is kept registered so existing connections (if any) continue to
+  // sync. The Connect UI no longer offers it — GoCardless closed signups.
+  gocardless:     gocardlessAdapter,
   // manual_csv has no daily sync — it's user-driven upload only.
 };
 

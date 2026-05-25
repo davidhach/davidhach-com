@@ -3,23 +3,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label, Select } from "@/components/ui/primitives";
 
-type Mode = "pick" | "gocardless" | "btc" | "eth" | "csv" | "depot";
+type Mode = "pick" | "enablebanking" | "btc" | "eth" | "csv" | "depot";
 
 interface FinAccount { id: string; name: string; currency: string; kind: string; entityId: string }
 interface Entity { id: string; name: string; currency: string }
-interface Institution { id: string; name: string; bic: string | null; transactionDays: string | null }
+interface Aspsp { name: string; country: string; logo: string | null; psuTypes: string[]; maxConsentDays: number | null }
 
 interface Props {
   finAccounts: FinAccount[];
   entities: Entity[];
   preselectedAccountId: string | null;
   preselectedMode: string | null;
-  gocardlessConfigured: boolean;
+  enableBankingConfigured: boolean;
 }
 
-const VALID_MODES: Mode[] = ["pick", "gocardless", "btc", "eth", "csv", "depot"];
+const VALID_MODES: Mode[] = ["pick", "enablebanking", "btc", "eth", "csv", "depot"];
 
-export function NewBankClient({ finAccounts, entities, preselectedAccountId, preselectedMode, gocardlessConfigured }: Props) {
+export function NewBankClient({ finAccounts, entities, preselectedAccountId, preselectedMode, enableBankingConfigured }: Props) {
   const initialMode: Mode =
     preselectedMode && VALID_MODES.includes(preselectedMode as Mode) ? (preselectedMode as Mode) : "pick";
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -56,11 +56,11 @@ export function NewBankClient({ finAccounts, entities, preselectedAccountId, pre
     );
   }
 
-  if (mode === "pick") return <ProviderPicker onPick={setMode} gocardlessConfigured={gocardlessConfigured} />;
-  if (mode === "gocardless") {
-    return gocardlessConfigured
-      ? <GoCardlessFlow onBack={() => setMode("pick")} />
-      : <GoCardlessNotConfigured onBack={() => setMode("pick")} />;
+  if (mode === "pick") return <ProviderPicker onPick={setMode} enableBankingConfigured={enableBankingConfigured} />;
+  if (mode === "enablebanking") {
+    return enableBankingConfigured
+      ? <EnableBankingFlow onBack={() => setMode("pick")} />
+      : <EnableBankingNotConfigured onBack={() => setMode("pick")} />;
   }
   if (mode === "btc" || mode === "eth") {
     return <CryptoForm provider={mode === "btc" ? "btc_address" : "eth_address"}
@@ -152,21 +152,21 @@ function InlineAccountCreate({ entities, onCreated }: {
 
 // ─── Provider picker ───────────────────────────────────────────────────────
 
-function ProviderPicker({ onPick, gocardlessConfigured }: {
-  onPick: (m: Mode) => void; gocardlessConfigured: boolean;
+function ProviderPicker({ onPick, enableBankingConfigured }: {
+  onPick: (m: Mode) => void; enableBankingConfigured: boolean;
 }) {
   const items: Array<{ id: Mode; title: string; desc: string; badge?: string }> = [
-    { id: "gocardless", title: "EU bank — automatic daily sync",
-      desc: "Connect Sparkasse, Consors, N26 or ~2,500 EU banks via GoCardless (read-only PSD2). Balances and transactions pulled daily and on demand.",
-      badge: gocardlessConfigured ? undefined : "needs setup" },
+    { id: "enablebanking", title: "EU bank — automatic daily sync",
+      desc: "Connect Sparkasse, Consors, N26 and other EU banks via Enable Banking (read-only PSD2 AIS). Balances and transactions pulled daily and on demand.",
+      badge: enableBankingConfigured ? undefined : "needs setup" },
+    { id: "csv", title: "Bank transactions CSV — works for everyone, no signup",
+      desc: "Upload a transactions export from your bank or card. Each row becomes a Transaction. The universal fallback when a bank isn't on Enable Banking." },
+    { id: "depot", title: "Broker depot CSV — current positions",
+      desc: "Upload a positions export from your broker (Comdirect, Consors, Trade Republic). Each row becomes an Asset with its quantity. PSD2 can't expose depots, so CSV is the realistic path." },
     { id: "btc", title: "Bitcoin address (balance only)",
       desc: "Paste a public BTC address. We read its balance from mempool.space daily. No private keys ever leave you." },
     { id: "eth", title: "Ethereum address (balance only)",
       desc: "Paste a public ETH address. Read via a public RPC. No private keys, no transactions written." },
-    { id: "csv", title: "Bank transactions CSV (one-time import)",
-      desc: "Upload a transactions export from any bank or card. Each row becomes a Transaction. Best when the bank isn't on GoCardless." },
-    { id: "depot", title: "Broker depot CSV (positions)",
-      desc: "Upload a positions export from your broker (Comdirect, Consors, Trade Republic). Each row becomes an Asset with its quantity. PSD2 doesn't expose depots — this is the realistic path." },
   ];
   return (
     <ul className="space-y-2">
@@ -190,67 +190,80 @@ function ProviderPicker({ onPick, gocardlessConfigured }: {
   );
 }
 
-// ─── GoCardless not-configured ─────────────────────────────────────────────
+// ─── Enable Banking not-configured ─────────────────────────────────────────
 
-function GoCardlessNotConfigured({ onBack }: { onBack: () => void }) {
+function EnableBankingNotConfigured({ onBack }: { onBack: () => void }) {
   return (
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
-      <h2 className="font-medium">GoCardless isn&apos;t configured yet</h2>
+      <h2 className="font-medium">EU-bank sync isn&apos;t configured yet</h2>
       <p className="text-sm text-muted">
-        EU bank sync uses GoCardless Bank Account Data (free tier, ~2,500 banks). It needs two
-        environment variables set in your Vercel project. One-time setup, takes ~5 minutes.
+        We use <strong>Enable Banking</strong> for PSD2 access (read-only). One-time setup,
+        ~10 minutes. <em>(GoCardless Bank Account Data closed to new signups, so it&apos;s no
+        longer the recommended path.)</em>
       </p>
       <ol className="text-sm space-y-2 list-decimal pl-5">
         <li>
-          Register at{" "}
-          <a href="https://bankaccountdata.gocardless.com/" target="_blank" rel="noreferrer" className="underline text-accent">
-            bankaccountdata.gocardless.com
+          Sign up at{" "}
+          <a href="https://enablebanking.com/" target="_blank" rel="noreferrer" className="underline text-accent">
+            enablebanking.com
           </a>{" "}
-          and verify your email (free, no card).
+          and verify your email (free sandbox + live application).
         </li>
-        <li>In <em>User secrets</em>, click <em>Create new</em>. Copy the <code>secret_id</code> and <code>secret_key</code>.</li>
+        <li>
+          In the <em>Control Panel</em>, create an <em>Application</em>:
+          <ul className="list-disc pl-5 mt-1 space-y-0.5 text-xs">
+            <li>Redirect URL: <code>{"<your domain>/api/banks/enablebanking/callback"}</code></li>
+            <li>Environment: <em>Sandbox</em> to test, or <em>Production</em> for real data.</li>
+            <li>Generate a new key pair. Download the <strong>private key</strong> PEM file and copy the <strong>application_id</strong> (UUID).</li>
+          </ul>
+        </li>
         <li>
           In your Vercel project (Settings → Environment Variables) add:
-          <pre className="bg-bg border border-border rounded-lg p-2 mt-1 text-xs">
-GOCARDLESS_SECRET_ID = &lt;your secret_id&gt;
-GOCARDLESS_SECRET_KEY = &lt;your secret_key&gt;
+          <pre className="bg-bg border border-border rounded-lg p-2 mt-1 text-xs whitespace-pre-wrap">
+ENABLE_BANKING_APP_ID = &lt;application_id&gt;
+ENABLE_BANKING_PRIVATE_KEY = &lt;contents of the .pem file&gt;
           </pre>
+          <p className="text-xs text-muted mt-1">
+            Paste the private key including the <code>-----BEGIN PRIVATE KEY-----</code> /
+            <code>-----END PRIVATE KEY-----</code> lines. Vercel preserves multi-line values.
+          </p>
         </li>
-        <li>Redeploy (or push any commit). Come back to this page — the EU-bank flow will be available.</li>
+        <li>Redeploy (or push any commit). Come back here — the EU-bank flow will be available.</li>
       </ol>
       <p className="text-xs text-muted">
-        Until then, you can still use Bitcoin / Ethereum / CSV connectors above. They don&apos;t need any setup.
+        Until then, the <strong>Bank transactions CSV</strong> option above works for any bank
+        with no setup — it&apos;s the universal fallback.
       </p>
     </div>
   );
 }
 
-// ─── GoCardless flow ───────────────────────────────────────────────────────
+// ─── Enable Banking flow ───────────────────────────────────────────────────
 
-function GoCardlessFlow({ onBack }: { onBack: () => void }) {
+function EnableBankingFlow({ onBack }: { onBack: () => void }) {
   const [country, setCountry] = useState("DE");
   const [filter, setFilter] = useState("");
-  const [list, setList] = useState<Institution[] | null>(null);
+  const [list, setList] = useState<Aspsp[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true); setError(null);
-    fetch(`/api/banks/gocardless/institutions?country=${country}`)
+    fetch(`/api/banks/enablebanking/aspsps?country=${country}`)
       .then(async (r) => r.ok ? r.json() : Promise.reject((await r.json()).error))
       .then(setList)
       .catch((e) => setError(typeof e === "string" ? e : "Failed"))
       .finally(() => setLoading(false));
   }, [country]);
 
-  async function start(inst: Institution) {
-    setStarting(inst.id); setError(null);
-    const res = await fetch("/api/banks/gocardless/start", {
+  async function start(a: Aspsp) {
+    setStarting(a.name); setError(null);
+    const res = await fetch("/api/banks/enablebanking/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ institutionId: inst.id, institutionName: inst.name }),
+      body: JSON.stringify({ aspspName: a.name, aspspCountry: a.country }),
     });
     const data = await res.json();
     setStarting(null);
@@ -264,15 +277,17 @@ function GoCardlessFlow({ onBack }: { onBack: () => void }) {
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
       <HelpBox>
-        Pick your bank below. You&apos;ll be redirected to your bank&apos;s consent page to authorize
-        read-only access. <strong>Ledger can never initiate a transfer</strong> — this is PSD2
-        AIS, not PIS. After consent we&apos;ll show your accounts so you can pick which to link.
+        Pick your bank. You&apos;ll be redirected to the bank&apos;s consent page to authorize
+        <strong> read-only</strong> access. <strong>Ledger can never initiate a transfer</strong>
+        {" "}— this is PSD2 AIS, not PIS. After consent we&apos;ll show your accounts so you can
+        pick which to link. Consent typically lasts 180 days; you re-confirm at the bank when it expires.
       </HelpBox>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Country</Label>
           <Select value={country} onChange={(e) => setCountry(e.target.value)}>
-            {["DE", "AT", "CH", "FR", "IT", "ES", "NL", "BE", "IE", "GB"].map((c) => <option key={c} value={c}>{c}</option>)}
+            {["DE", "AT", "CH", "FR", "IT", "ES", "NL", "BE", "IE", "GB", "SE", "NO", "DK", "FI"].map((c) =>
+              <option key={c} value={c}>{c}</option>)}
           </Select>
         </div>
         <div>
@@ -284,14 +299,19 @@ function GoCardlessFlow({ onBack }: { onBack: () => void }) {
       {error && <p className="text-xs text-negative">{error}</p>}
       {list && (
         <ul className="divide-y divide-border max-h-96 overflow-auto border border-border rounded-xl">
-          {filtered.slice(0, 50).map((i) => (
-            <li key={i.id} className="flex items-center justify-between gap-2 px-3 py-2">
-              <div className="min-w-0">
-                <div className="text-sm truncate">{i.name}</div>
-                <div className="text-xs text-muted truncate">{i.bic ?? i.id}</div>
+          {filtered.slice(0, 100).map((i) => (
+            <li key={`${i.country}:${i.name}`} className="flex items-center justify-between gap-2 px-3 py-2">
+              <div className="min-w-0 flex items-center gap-2">
+                {i.logo && <img src={i.logo} alt="" className="w-6 h-6 object-contain" />}
+                <div className="min-w-0">
+                  <div className="text-sm truncate">{i.name}</div>
+                  <div className="text-xs text-muted truncate">
+                    {i.country}{i.maxConsentDays ? ` · up to ${i.maxConsentDays}-day consent` : ""}
+                  </div>
+                </div>
               </div>
-              <Button variant="secondary" onClick={() => start(i)} disabled={starting === i.id}>
-                {starting === i.id ? "…" : "Connect"}
+              <Button variant="secondary" onClick={() => start(i)} disabled={starting === i.name}>
+                {starting === i.name ? "…" : "Connect"}
               </Button>
             </li>
           ))}

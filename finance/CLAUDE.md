@@ -53,9 +53,15 @@ financial data — security and data integrity come before everything else.**
   implements `BankAdapter.sync()` — **no write methods exist by design**, so the app
   literally cannot initiate a payment. `BankConnection` rows are dispatched to adapters
   by the daily cron via `runSync(connectionId)`. Transaction dedupe uses
-  `(finAccountId, date, amount, merchantNormalized)` — same key as OCR. GoCardless requires
-  `GOCARDLESS_SECRET_ID` + `GOCARDLESS_SECRET_KEY`; without them, the EU-bank flow is
-  disabled but BTC / ETH / CSV still work.
+  `(finAccountId, date, amount, merchantNormalized)` — same key as OCR.
+- **EU-bank provider is Enable Banking** (`src/lib/bank/enablebanking/`). Auth is a JWT
+  signed RS256 with `ENABLE_BANKING_PRIVATE_KEY` (PEM) and `kid` = `ENABLE_BANKING_APP_ID`.
+  Consent flow: `POST /auth` → bank redirect → callback → `POST /sessions` exchanges the
+  code for a session_id (stored on `BankConnection.requisitionId` — column reused) →
+  `GET /accounts/{uid}/balances` and `/transactions`. Without the env vars the connect
+  page shows a friendly setup guide; BTC/ETH/CSV still work.
+- **GoCardless is legacy**. Adapter kept registered so existing rows continue to sync,
+  but the Connect UI no longer offers it — GoCardless closed signups.
 - **ISIN → ticker** resolution uses OpenFIGI (free, no key required; `OPENFIGI_API_KEY`
   raises the rate limit). Cached in `IsinMapping`. Resolver lives in `src/lib/isin-resolver.ts`.
 - **Quantity-based assets** (STOCKS / CRYPTO with a non-manual `priceSource`): the

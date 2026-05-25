@@ -15,7 +15,8 @@ const TONE: Record<string, "positive" | "warning" | "negative" | "neutral"> = {
 };
 
 const PROVIDER_LABEL: Record<string, string> = {
-  gocardless: "GoCardless (EU bank)",
+  enablebanking: "EU bank (Enable Banking)",
+  gocardless: "EU bank (GoCardless — legacy)",
   btc_address: "Bitcoin address",
   eth_address: "Ethereum address",
   manual_csv: "Manual CSV import",
@@ -72,7 +73,7 @@ export default async function BanksPage() {
                 <BankRowActions
                   id={c.id}
                   status={c.status}
-                  needsLinking={c.provider === "gocardless" && c.status === "PENDING" && !!c.requisitionId}
+                  needsLinking={(c.provider === "enablebanking" || c.provider === "gocardless") && c.status === "PENDING" && !!c.requisitionId}
                 />
               </li>
             ))}

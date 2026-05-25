@@ -28,8 +28,11 @@ export default async function NewBankPage({
     ? params.finAccountId
     : null;
 
-  // GoCardless: check whether the env is set so we can show a configured/not-configured state.
-  const gocardlessConfigured = !!(process.env.GOCARDLESS_SECRET_ID && process.env.GOCARDLESS_SECRET_KEY);
+  // Enable Banking is the active EU provider. Check env at SSR so we can show
+  // a friendly setup guide if the keys aren't in place yet.
+  const enableBankingConfigured = !!(
+    process.env.ENABLE_BANKING_APP_ID && process.env.ENABLE_BANKING_PRIVATE_KEY
+  );
 
   return (
     <div className="space-y-5 max-w-3xl">
@@ -46,7 +49,7 @@ export default async function NewBankPage({
           entities={entities}
           preselectedAccountId={preselectedAccountId}
           preselectedMode={params.mode ?? null}
-          gocardlessConfigured={gocardlessConfigured}
+          enableBankingConfigured={enableBankingConfigured}
         />
       </Card>
     </div>
