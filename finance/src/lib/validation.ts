@@ -117,3 +117,33 @@ export const ocrResponse = z.object({
 
 export type ExtractedTransaction = z.infer<typeof extractedTransaction>;
 export type OcrResponse = z.infer<typeof ocrResponse>;
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+// Strength enforcement happens in src/lib/password.ts; these schemas only check
+// shape/length so we can return a parse error before hitting argon2.
+
+export const emailField = z.string().email().max(254).toLowerCase();
+export const passwordField = z.string().min(1).max(256);
+export const totpCode = z.string().regex(/^\s*\d{6}\s*$/, "6-digit code");
+export const recoveryCodeField = z.string().min(8).max(32);
+
+export const passwordLoginInput = z.object({
+  email: emailField,
+  password: passwordField,
+  totp: totpCode.optional(),
+  recoveryCode: recoveryCodeField.optional(),
+});
+
+export const passwordSetInput = z.object({
+  newPassword: passwordField,
+  currentPassword: passwordField.optional(), // required when a password already exists
+});
+
+export const passwordResetRequestInput = z.object({ email: emailField });
+export const passwordResetConfirmInput = z.object({
+  token: z.string().min(20).max(200),
+  newPassword: passwordField,
+});
+
+export const totpConfirmInput = z.object({ code: totpCode });
+export const totpDisableInput = z.object({ password: passwordField });

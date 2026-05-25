@@ -46,8 +46,23 @@ export default async function SettingsPage() {
       </Card>
 
       <Card>
-        <h2 className="font-medium text-sm mb-3">Security & backup</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium text-sm">Security & backup</h2>
+          <a href="/settings/security" className="text-xs underline text-muted">Manage password & 2FA →</a>
+        </div>
         <ul className="text-sm space-y-2">
+          <li className="flex justify-between">
+            <span className="text-muted">Password</span>
+            {user?.passwordHash
+              ? <Badge tone="positive">Set</Badge>
+              : <Badge tone="warning">Not set</Badge>}
+          </li>
+          <li className="flex justify-between">
+            <span className="text-muted">Two-factor</span>
+            {user?.totpEnabled
+              ? <Badge tone="positive">On</Badge>
+              : <Badge>Off</Badge>}
+          </li>
           <li className="flex justify-between"><span className="text-muted">Categories</span><span>{categoriesCount}</span></li>
           <li className="flex justify-between"><span className="text-muted">Last backup</span><span>{lastBackup?.date.toISOString().slice(0, 10) ?? "—"}</span></li>
           <li className="flex justify-between"><span className="text-muted">Statement encryption</span><Badge tone="positive">AES-256-GCM (envelope)</Badge></li>

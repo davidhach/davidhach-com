@@ -88,3 +88,25 @@ export function unsealWithKek(b: { ciphertext: Buffer; ivB64: string; authTagB64
   decipher.setAuthTag(Buffer.from(b.authTagB64, "base64"));
   return Buffer.concat([decipher.update(b.ciphertext), decipher.final()]);
 }
+
+// Pack a short secret (e.g. TOTP base32 string) into a single base64 column
+// containing iv||tag||ciphertext, encrypted directly with the KEK.
+// Cheaper than envelope encryption for tiny values and survives a DB-only leak.
+export function encryptStringWithKek(plaintext: string): string {
+  const { ciphertext, ivB64, authTagB64 } = sealWithKek(Buffer.from(plaintext, "utf8"));
+  const iv = Buffer.from(ivB64, "base64");
+  const tag = Buffer.from(authTagB64, "base64");
+  return Buffer.concat([iv, tag, ciphertext]).toString("base64");
+}
+
+export function decryptStringWithKek(packed: string): string {
+  const buf = Buffer.from(packed, "base64");
+  const iv = buf.subarray(0, IV_LEN);
+  const tag = buf.subarray(IV_LEN, IV_LEN + 16);
+  const ct = buf.subarray(IV_LEN + 16);
+  return unsealWithKek({
+    ciphertext: ct,
+    ivB64: iv.toString("base64"),
+    authTagB64: tag.toString("base64"),
+  }).toString("utf8");
+}

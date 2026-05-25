@@ -30,8 +30,13 @@ financial data — security and data integrity come before everything else.**
   from-address unless that domain is verified in Resend first.
 - **DB:** use Neon's **pooled** connection string for `DATABASE_URL`. New schema changes
   need a real Prisma migration in `prisma/migrations/` (so `migrate deploy` applies it).
-- **Deps:** `@simplewebauthn/*` and `argon2` were removed (unused + peer conflict with
-  next-auth). Don't re-add unless passkeys are actually implemented.
+- **Deps:** `@simplewebauthn/*` and the `argon2` npm package were removed (unused + peer
+  conflict with next-auth). For password hashing we use `@node-rs/argon2` instead — it has
+  no peer-dep conflict. Don't switch back to `argon2`.
+- **Password + TOTP** layer (added Phase 1) lives alongside magic-link. Custom login route
+  at `/api/auth/password/login` creates `Session` rows directly so DB sessions still work
+  (Auth.js Credentials provider can't do DB sessions). TOTP secrets are KEK-encrypted in
+  `User.totpSecretEnc`; recovery codes are argon2id-hashed in `User.recoveryCodesHash`.
 
 ## Security model — preserve it
 

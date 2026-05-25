@@ -4,3 +4,6 @@ import { randomBytes } from "node:crypto";
 if (!process.env.MASTER_KEK) {
   process.env.MASTER_KEK = randomBytes(32).toString("base64");
 }
+if (!process.env.AUTH_SECRET) {
+  process.env.AUTH_SECRET = randomBytes(32).toString("base64");
+}

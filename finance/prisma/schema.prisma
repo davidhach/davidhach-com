@@ -26,6 +26,15 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Password + TOTP (optional, layered on top of magic-link).
+  passwordHash       String?   // argon2id; null = user has not set a password.
+  passwordChangedAt  DateTime?
+  totpSecretEnc      String?   // KEK-encrypted base32 secret (iv|ct|tag, all b64). Null until enrolled.
+  totpEnabled        Boolean   @default(false) // true only after user confirms enrollment with a valid code.
+  recoveryCodesHash  String?   @db.Text // newline-joined argon2id hashes of one-time recovery codes.
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+
   accounts        Account[]
   sessions        Session[]
   authenticators  Authenticator[]   // WebAuthn / passkeys
@@ -37,6 +46,8 @@ model User {
   snapshots       Snapshot[]
   transactions    Transaction[]
   categories      Category[]
+  customClasses   AssetClassCustom[]
+  categoryRules   CategoryRule[]
   tags            Tag[]
   notes           Note[]
   uploads         StatementUpload[]
@@ -175,6 +186,7 @@ model Asset {
   entityId      String
   finAccountId  String?
   categoryId    String?
+  customClassId String?     // overrides assetClass when set (user-defined class)
   name          String      // "AAPL", "Primary residence", "Brokerage cash"
   symbol        String?     // ticker if applicable
   assetClass    AssetClass  @default(CASH)
@@ -182,26 +194,33 @@ model Asset {
   quantity      Decimal?    @db.Decimal(28, 10) // null for aggregate-value assets
   costBasis     Decimal?    @db.Decimal(20, 2)
   currentValue  Decimal     @db.Decimal(20, 2)  // denormalised cache of latest valuation
+  priceSource   String?     // adapter id: "stooq" | "coingecko" | "metals" | "manual" | null
+  externalRef   String?     // ISIN / coin id / metal symbol — input to the adapter
+  lastPricedAt  DateTime?
   notes         String?
   archived      Boolean     @default(false)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  entity        Entity      @relation(fields: [entityId], references: [id], onDelete: Restrict)
-  finAccount    FinAccount? @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
-  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  valuations    Valuation[] @relation("AssetValuations")
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity        Entity            @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  finAccount    FinAccount?       @relation(fields: [finAccountId], references: [id], onDelete: SetNull)
+  category      Category?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  customClass   AssetClassCustom? @relation(fields: [customClassId], references: [id], onDelete: SetNull)
+  valuations    Valuation[]       @relation("AssetValuations")
   tags          TagOnAsset[]
 
   @@index([userId, archived])
   @@index([entityId])
   @@index([assetClass])
+  @@index([priceSource, lastPricedAt])
 }
 
 enum AssetClass {
   CASH
-  EQUITY
+  EQUITY            // legacy — new entries should use STOCKS
+  STOCKS
+  COMPANY_SHARES    // privately held shares; manual valuation
   BOND
   CRYPTO
   REAL_ESTATE
@@ -210,7 +229,24 @@ enum AssetClass {
   COLLECTIBLE
   RETIREMENT
   RECEIVABLE
+  LOAN_RECEIVABLE   // money you've lent out
   OTHER
+}
+
+// User-defined asset class. When Asset.customClassId is set, it overrides assetClass for display.
+model AssetClassCustom {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assets    Asset[]
+
+  @@unique([userId, name])
+  @@index([userId])
 }
 
 model Liability {
@@ -280,6 +316,7 @@ enum ValuationSource {
   IMPORT
   MARKET_FEED
   RECONCILED
+  PRICE_ADAPTER     // automated daily price refresh (stocks/crypto/metals)
 }
 
 // Snapshot = aggregate net-worth at a point in time. Computed monthly (or
@@ -361,6 +398,7 @@ model Category {
   assets      Asset[]
   liabilities Liability[]
   transactions Transaction[]
+  rules       CategoryRule[]
 
   @@unique([userId, name, kind])
   @@index([userId, kind])
@@ -371,6 +409,31 @@ enum CategoryKind {
   LIABILITY
   INCOME
   EXPENSE
+}
+
+// CategoryRule = "teach the tool". When a user re-categorises a transaction we record a
+// rule. Future transactions whose normalised merchant (or description substring) matches
+// get the new category applied automatically.
+model CategoryRule {
+  id           String          @id @default(cuid())
+  userId       String
+  matchType    CategoryMatch   @default(MERCHANT_EXACT)
+  pattern      String          // lowercased; meaning depends on matchType
+  categoryId   String
+  priority     Int             @default(0) // higher wins on conflict
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchType, pattern])
+  @@index([userId, priority])
+}
+
+enum CategoryMatch {
+  MERCHANT_EXACT          // exact match on Transaction.merchantNormalized
+  DESCRIPTION_CONTAINS    // case-insensitive substring of Transaction.description
 }
 
 model Tag {
