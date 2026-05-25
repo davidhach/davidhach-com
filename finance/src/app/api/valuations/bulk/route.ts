@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     const writes = data.entries.flatMap((e) => {
       const asset = byId.get(e.assetId)!;
       const ccy = e.currency ?? asset.currency;
-      const ops = [
+      const ops: import("@prisma/client").Prisma.PrismaPromise<unknown>[] = [
         prisma.valuation.create({
           data: {
             userId,
