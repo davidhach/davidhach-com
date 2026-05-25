@@ -2,19 +2,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { ProfileMenu } from "@/components/profile-menu";
 
+// Settings is intentionally NOT in this list — it lives under the profile menu now.
 const items = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/assets", label: "Assets" },
+  { href: "/dashboard",   label: "Dashboard" },
+  { href: "/assets",      label: "Assets" },
   { href: "/liabilities", label: "Liabilities" },
-  { href: "/accounts", label: "Accounts" },
-  { href: "/spending", label: "Spending" },
-  { href: "/statements", label: "Statements" },
-  { href: "/reports", label: "Reports" },
-  { href: "/settings", label: "Settings" },
+  { href: "/accounts",    label: "Accounts" },
+  { href: "/spending",    label: "Spending" },
+  { href: "/statements",  label: "Statements" },
+  { href: "/reports",     label: "Reports" },
 ];
 
-export function Nav() {
+export function Nav({ email }: { email: string }) {
   const pathname = usePathname();
   return (
     <nav className="border-b border-border bg-card/60 backdrop-blur sticky top-0 z-10">
@@ -22,7 +23,7 @@ export function Nav() {
         <Link href="/dashboard" className="font-semibold text-sm tracking-tight mr-4">
           Ledger
         </Link>
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-auto flex-1">
           {items.map((it) => (
             <Link
               key={it.href}
@@ -36,6 +37,7 @@ export function Nav() {
             </Link>
           ))}
         </div>
+        <ProfileMenu email={email} />
       </div>
     </nav>
   );

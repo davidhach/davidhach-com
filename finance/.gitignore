@@ -13,3 +13,7 @@ out
 ios/build
 ios/DerivedData
 ios/.swiftpm
+
+# generated / cache
+next-env.d.ts
+tsconfig.tsbuildinfo

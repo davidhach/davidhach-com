@@ -2,6 +2,7 @@ import { requireUserId } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { Card, Badge } from "@/components/ui/primitives";
 import { CurrencyPicker } from "@/components/currency-picker";
+import { EntitiesManager } from "@/components/entities-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -30,21 +31,13 @@ export default async function SettingsPage() {
 
       <Card>
         <h2 className="font-medium text-sm mb-3">Entities</h2>
-        {entities.length === 0 ? (
-          <p className="text-sm text-muted">No entities yet. Create one with `POST /api/entities`.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {entities.map((e) => (
-              <li key={e.id} className="py-2 flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-sm">{e.name}</div>
-                  <div className="text-xs text-muted">{e.kind} · {e.currency}</div>
-                </div>
-                <Badge>{e.kind.toLowerCase()}</Badge>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="text-xs text-muted mb-4">
+          An entity owns assets and liabilities. Use them to keep personal, company, or trust
+          balances separately and to filter the dashboard by entity.
+        </p>
+        <EntitiesManager
+          initial={entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, currency: e.currency }))}
+        />
       </Card>
 
       <Card>

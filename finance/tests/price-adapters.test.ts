@@ -18,7 +18,8 @@ AAPL.US,2026-05-22,22:00:01,180.10,181.50,179.80,180.95,52000000`;
 SAP.DE,2026-05-22,17:35:00,165.20,166.50,164.90,166.10,1200000`;
     const q = parseStooqCsv(csv, "SAP.DE");
     expect(q?.currency).toBe("EUR");
-    expect(q?.price.toString()).toBe("166.10");
+    // Decimal trims trailing zeros in toString; use toFixed for an exact decimal-place compare.
+    expect(q?.price.toFixed(2)).toBe("166.10");
   });
 
   it("returns null when Stooq has no data (N/D)", () => {

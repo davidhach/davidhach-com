@@ -5,6 +5,7 @@
  * Enrollment is finalised by POST /api/auth/totp/confirm with a valid code.
  */
 import { NextResponse } from "next/server";
+import QRCode from "qrcode";
 import { prisma } from "@/lib/db";
 import { requireUserId } from "@/lib/auth";
 import { generateSecret, sealSecret, buildOtpauthUrl } from "@/lib/totp";
@@ -27,8 +28,18 @@ export async function POST(req: Request) {
 
   await recordAudit({ userId, action: "auth.totp.enroll.begin", req });
 
+  const otpauthUrl = buildOtpauthUrl(user.email, secret);
+  // SVG so it scales crisply on any DPI. Inline by the client.
+  const qrSvg = await QRCode.toString(otpauthUrl, {
+    type: "svg",
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 240,
+  });
+
   return NextResponse.json({
-    otpauthUrl: buildOtpauthUrl(user.email, secret),
-    secret, // shown once so the user can type it manually if needed
+    otpauthUrl,
+    secret,    // shown once so the user can type it manually if needed
+    qrSvg,     // inline SVG of the otpauth URL
   });
 }

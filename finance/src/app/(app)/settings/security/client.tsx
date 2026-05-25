@@ -73,7 +73,7 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
 function TotpSection({ totpEnabled, remainingRecovery, hasPassword }: {
   totpEnabled: boolean; remainingRecovery: number; hasPassword: boolean;
 }) {
-  const [enrollment, setEnrollment] = useState<{ otpauthUrl: string; secret: string } | null>(null);
+  const [enrollment, setEnrollment] = useState<{ otpauthUrl: string; secret: string; qrSvg: string } | null>(null);
   const [code, setCode] = useState("");
   const [recovery, setRecovery] = useState<string[] | null>(null);
   const [disablePw, setDisablePw] = useState("");
@@ -135,20 +135,31 @@ function TotpSection({ totpEnabled, remainingRecovery, hasPassword }: {
       {enrollment && (
         <div className="space-y-3">
           <p className="text-xs text-muted">
-            Scan the QR in your authenticator app, or enter the secret manually:
+            Scan this QR with Google Authenticator, 1Password, Authy, or any TOTP app.
           </p>
-          <code className="block text-xs bg-bg p-2 rounded border border-border break-all">
-            {enrollment.secret}
-          </code>
-          <p className="text-xs text-muted break-all">
-            URL: <span className="font-mono">{enrollment.otpauthUrl}</span>
-          </p>
-          <div>
-            <Label htmlFor="totp-confirm">Code from app</Label>
-            <Input id="totp-confirm" inputMode="numeric" pattern="\d{6}" maxLength={6}
-              value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <div
+              className="bg-white rounded-lg p-2 shrink-0"
+              // Server-rendered SVG of the otpauth:// URL, no untrusted HTML.
+              dangerouslySetInnerHTML={{ __html: enrollment.qrSvg }}
+            />
+            <div className="space-y-2 min-w-0 flex-1">
+              <div>
+                <p className="text-xs text-muted mb-1">Can't scan? Type this secret instead:</p>
+                <code className="block text-xs bg-bg p-2 rounded border border-border break-all">
+                  {enrollment.secret}
+                </code>
+              </div>
+              <div>
+                <Label htmlFor="totp-confirm">Code from app</Label>
+                <Input id="totp-confirm" inputMode="numeric" pattern="\d{6}" maxLength={6}
+                  value={code} onChange={(e) => setCode(e.target.value)} autoFocus />
+              </div>
+              <Button onClick={confirm} disabled={busy || code.length !== 6}>
+                {busy ? "…" : "Confirm"}
+              </Button>
+            </div>
           </div>
-          <Button onClick={confirm} disabled={busy}>{busy ? "…" : "Confirm"}</Button>
         </div>
       )}
 
