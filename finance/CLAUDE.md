@@ -112,6 +112,22 @@ financial data — security and data integrity come before everything else.**
 - **ETH adapter** tries `ETH_RPC_URL` (if set) then publicnode → llamarpc → ankr,
   each through `fetchWithTimeout(4s)`. Real RPC errors surface in the connection's
   `lastError` instead of a generic 500. Wei→ETH via BigInt to keep sub-gwei precision.
+- **One-sided self-transfers** (Wise / brokerage / own accounts not connected via PSD2):
+  `TransferRule` table (matchType MERCHANT_EXACT / IBAN_EXACT / DESCRIPTION_CONTAINS).
+  `src/lib/own-account-transfers.ts` derives a per-user "own account" pattern set from
+  connected BankAccountLink IBANs + names + KNOWN_OWN_PROVIDERS (wise/transferwise) + the
+  user's TransferRules. Applied at insert time in `persistTransactions` AND on rule
+  create (`backfillByRule`). The "↔ own account" button on each /spending row creates a
+  rule + marks the txn excluded; `/api/transfers/rescan` re-runs across history.
+- **Auto-seed defaults on first sync**: `autoSeedIfFirstRun(userId)` runs after every
+  successful sync; if the user has zero `CategoryRule` rows, it seeds the defaults +
+  backfills uncategorised txns. So freshly-connected accounts categorise themselves on
+  arrival, no manual button required.
+- **Connection health banner** (`src/components/connection-health.tsx`) on Dashboard +
+  Spending. Shows ERROR / CONSENT_EXPIRED / STALE (= ACTIVE but lastSyncedAt > 3d ago)
+  with per-row "Retry sync" and "Reconnect at bank" buttons. Reconnect restarts the
+  Enable Banking consent for the SAME institution as the failing row; the new
+  connection links in alongside, the user disconnects the old one manually.
 - **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
   a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
   cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback

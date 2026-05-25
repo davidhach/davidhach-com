@@ -7,6 +7,7 @@ import { Card, Badge, Button } from "@/components/ui/primitives";
 import { NetWorthChart } from "@/components/net-worth-chart";
 import { AllocationPie } from "@/components/allocation-pie";
 import { EntityFilter } from "@/components/entity-filter";
+import { ConnectionHealthBanner } from "@/components/connection-health";
 import { formatMoney, formatPercent, pctChange } from "@/lib/utils";
 import { convertSafe } from "@/lib/fx";
 import { Decimal } from "decimal.js";
@@ -99,6 +100,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-6">
+      <ConnectionHealthBanner userId={userId} />
       {breakdown.fxWarnings.length > 0 && (
         <div className="text-xs px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-700">
           <strong>FX rate unavailable for:</strong> {breakdown.fxWarnings.join(", ")}.{" "}

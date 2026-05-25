@@ -48,6 +48,7 @@ model User {
   categories      Category[]
   customClasses   AssetClassCustom[]
   categoryRules   CategoryRule[]
+  transferRules   TransferRule[]
   bankConnections BankConnection[]
   bankAccountLinks BankAccountLink[]
   assetTransactions AssetTransaction[]
@@ -436,6 +437,34 @@ model Transaction {
 enum TransferKind {
   TRANSFER       // internal transfer between two of the user's accounts (same entity)
   CARD_PAYMENT   // settlement of a credit-card balance from a checking account
+}
+
+// User-defined "this counterparty is one of MY accounts" rule. Lets the user
+// mark Wise / brokerage / joint-account transfers so they stop double-counting
+// as spending or income. ONE-SIDED: a single transaction can be marked as a
+// transfer even if the matching inflow isn't visible (typical when the other
+// account isn't connected via PSD2).
+//
+// Applied on transaction insert (in persistTransactions) AND on rule create
+// (backfill across existing matching rows).
+model TransferRule {
+  id        String              @id @default(cuid())
+  userId    String
+  matchType TransferMatchType
+  pattern   String              // lowercased; meaning depends on matchType
+  label     String?             // free-text reminder ("My Wise EUR account")
+  createdAt DateTime            @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchType, pattern])
+  @@index([userId])
+}
+
+enum TransferMatchType {
+  MERCHANT_EXACT          // exact match on Transaction.merchantNormalized
+  IBAN_EXACT              // exact-IBAN substring in description / merchant
+  DESCRIPTION_CONTAINS    // case-insensitive substring of Transaction.description
 }
 
 enum TxnStatus {

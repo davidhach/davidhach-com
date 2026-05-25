@@ -10,6 +10,8 @@ import { prisma } from "../db";
 import { recordAudit } from "../audit";
 import { normalizeMerchant } from "../ocr";
 import { applyRulesToTransaction } from "../category-rules";
+import { loadSelfTransferContext, isSelfTransfer, type SelfTransferContext } from "../own-account-transfers";
+import { autoSeedIfFirstRun } from "../seed-defaults";
 import { refreshAssetPrice } from "../price-refresh";
 import type { BankAdapter, AdapterTransaction, AdapterBalance } from "./types";
 import { btcAdapter } from "./crypto/btc";
@@ -121,6 +123,13 @@ export async function runSync(connectionId: string): Promise<SyncOutcome> {
         lastError: warnings.length > 0 ? `Sync OK with warnings — ${warnings.join("; ").slice(0, 500)}` : null,
       },
     });
+
+    // First-run convenience: if the user has never seeded category rules,
+    // do it now so their freshly-imported transactions arrive already
+    // categorised instead of all "Uncategorized". Idempotent + cheap.
+    await autoSeedIfFirstRun(conn.userId).catch((e) => {
+      console.error("autoSeedIfFirstRun failed", (e as Error).message);
+    });
     await recordAudit({
       userId: conn.userId, action: "bank.sync.ok",
       targetType: "BankConnection", targetId: connectionId,
@@ -146,12 +155,21 @@ export async function runSync(connectionId: string): Promise<SyncOutcome> {
  * Insert transactions, deduping by (finAccountId, date, amount, merchantNormalized)
  * — same key the OCR pipeline uses, so cross-channel duplicates (statement OCR
  * + bank sync) are caught.
+ *
+ * On insert we also:
+ *   - apply CategoryRules (existing behaviour)
+ *   - check self-transfer detection (TransferRule + connection-derived patterns)
+ *     and pre-set transferKind / excludeFromTotals so Wise / own-account
+ *     transfers never show up in spending or income totals.
  */
 async function persistTransactions(
   userId: string,
   finAccountId: string,
   txns: AdapterTransaction[],
+  selfCtx?: SelfTransferContext,
 ): Promise<number> {
+  // Load the user's own-account context once per call (cheap; small set).
+  const ctx = selfCtx ?? await loadSelfTransferContext(userId);
   let inserted = 0;
   for (const t of txns) {
     const merchantNorm = normalizeMerchant(t.merchant ?? t.description);
@@ -168,6 +186,12 @@ async function persistTransactions(
     });
     if (existing) continue;
 
+    const looksLikeSelf = isSelfTransfer(ctx, {
+      description: t.description,
+      merchant: t.merchant ?? null,
+      merchantNormalized: merchantNorm,
+    });
+
     const created = await prisma.transaction.create({
       data: {
         userId,
@@ -180,9 +204,11 @@ async function persistTransactions(
         merchantNormalized: merchantNorm,
         status: "CLEARED",
         reviewed: false,
+        ...(looksLikeSelf ? { transferKind: "TRANSFER", excludeFromTotals: true } : {}),
       },
     });
-    await applyRulesToTransaction(userId, created.id);
+    // Categories don't apply to self-transfers (they're not real spend/income).
+    if (!looksLikeSelf) await applyRulesToTransaction(userId, created.id);
     inserted++;
   }
   return inserted;

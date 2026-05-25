@@ -5,12 +5,14 @@ import { Decimal } from "decimal.js";
 import { subMonths, format, startOfMonth, startOfYear } from "date-fns";
 import { formatMoney } from "@/lib/utils";
 import { TransactionRecategorize } from "@/components/transaction-recategorize";
+import { TransactionMarkTransfer } from "@/components/transaction-mark-transfer";
 import { AllocationPie } from "@/components/allocation-pie";
 import { EntityFilter } from "@/components/entity-filter";
 import { AccountFilter } from "@/components/account-filter";
 import { PeriodFilter, type PeriodPreset } from "@/components/period-filter";
 import { TransferSuggestions } from "@/components/transfer-suggestions";
 import { TransferLine } from "@/components/transfer-line";
+import { ConnectionHealthBanner } from "@/components/connection-health";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +140,7 @@ export default async function SpendingPage({
         </div>
       </header>
 
+      <ConnectionHealthBanner userId={userId} />
       <TransferSuggestions />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -215,7 +218,8 @@ export default async function SpendingPage({
                 accountName={t.finAccount.name}
                 description={t.merchant ?? t.description}
                 amountDisplay={formatMoney(t.amount.toString(), t.currency)}
-                kindLabel={t.transferKind?.toLowerCase().replace("_", " ") ?? "transfer"} />
+                kindLabel={t.transferKind?.toLowerCase().replace("_", " ") ?? "transfer"}
+                paired={!!t.transferPairId} />
             ))}
           </ul>
         </Card>
@@ -305,7 +309,7 @@ function TxList({
               <div className="text-xs text-muted">
                 {t.date.toISOString().slice(0, 10)} · {t.finAccount.name}
               </div>
-              <div className="mt-1">
+              <div className="mt-1 flex items-center gap-3 flex-wrap">
                 <TransactionRecategorize
                   txId={t.id}
                   currentCategoryId={t.categoryId}
@@ -313,6 +317,10 @@ function TxList({
                   merchantNormalized={t.merchantNormalized}
                   categories={categories}
                   isIncome={kind === "income"}
+                />
+                <TransactionMarkTransfer
+                  txId={t.id}
+                  merchantNormalized={t.merchantNormalized}
                 />
               </div>
             </div>
