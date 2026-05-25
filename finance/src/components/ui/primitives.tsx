@@ -29,17 +29,20 @@ export function Button({
   );
 }
 
-export function Input({ className, ...rest }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      className={cn(
-        "w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10",
-        className,
-      )}
-      {...rest}
-    />
-  );
-}
+export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  function Input({ className, ...rest }, ref) {
+    return (
+      <input
+        ref={ref}
+        className={cn(
+          "w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/10",
+          className,
+        )}
+        {...rest}
+      />
+    );
+  },
+);
 
 export function Select({ className, ...rest }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
