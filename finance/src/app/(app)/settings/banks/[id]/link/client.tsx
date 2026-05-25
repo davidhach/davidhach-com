@@ -3,7 +3,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Select } from "@/components/ui/primitives";
 
-interface Account { externalId: string; iban?: string; currency: string; name: string }
+interface Account {
+  externalId: string;
+  iban?: string | null;
+  currency?: string | null;   // some ASPSPs don't expose it — guard everywhere
+  name: string;
+  productHint?: string | null;
+}
 interface FinAccount { id: string; name: string; currency: string }
 
 export function LinkClient({
@@ -36,12 +42,17 @@ export function LinkClient({
     setBusy(true); setError(null);
     const links = accounts
       .filter((a) => picks[a.externalId])
-      .map((a) => ({
-        externalId: a.externalId,
-        finAccountId: picks[a.externalId],
-        iban: a.iban,
-        currency: a.currency,
-      }));
+      .map((a) => {
+        const targetFin = finAccounts.find((f) => f.id === picks[a.externalId]);
+        return {
+          externalId: a.externalId,
+          finAccountId: picks[a.externalId],
+          iban: a.iban ?? undefined,
+          // Fall back to the chosen FinAccount's currency when the bank didn't
+          // tell us — the linker requires a 3-letter code.
+          currency: (a.currency ?? targetFin?.currency ?? "EUR").toUpperCase(),
+        };
+      });
     if (links.length === 0) { setError("Pick at least one account to link."); setBusy(false); return; }
     const res = await fetch(linkUrl, {
       method: "POST",
@@ -61,21 +72,26 @@ export function LinkClient({
   return (
     <div className="space-y-3">
       <ul className="divide-y divide-border border border-border rounded-xl">
-        {accounts.map((a) => (
-          <li key={a.externalId} className="grid grid-cols-[1fr_220px] gap-3 items-center px-3 py-3">
-            <div className="min-w-0">
-              <div className="text-sm">{a.name}</div>
-              <div className="text-xs text-muted truncate">
-                {a.iban ?? a.externalId} · {a.currency}
+        {accounts.map((a) => {
+          const subtitle = [a.iban ?? a.externalId, a.currency, a.productHint]
+            .filter((v): v is string => !!v && v.length > 0)
+            .join(" · ");
+          return (
+            <li key={a.externalId} className="grid grid-cols-[1fr_220px] gap-3 items-center px-3 py-3">
+              <div className="min-w-0">
+                <div className="text-sm">{a.name || "Account"}</div>
+                <div className="text-xs text-muted truncate">
+                  {subtitle || "Details unavailable"}
+                </div>
               </div>
-            </div>
-            <Select value={picks[a.externalId] ?? ""}
-              onChange={(e) => setPicks((p) => ({ ...p, [a.externalId]: e.target.value }))}>
-              <option value="">Don&apos;t link</option>
-              {finAccounts.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </Select>
-          </li>
-        ))}
+              <Select value={picks[a.externalId] ?? ""}
+                onChange={(e) => setPicks((p) => ({ ...p, [a.externalId]: e.target.value }))}>
+                <option value="">Don&apos;t link</option>
+                {finAccounts.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </Select>
+            </li>
+          );
+        })}
       </ul>
       <Button onClick={save} disabled={busy}>{busy ? "Linking…" : "Link & sync"}</Button>
     </div>

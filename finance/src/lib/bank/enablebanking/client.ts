@@ -200,17 +200,27 @@ export interface SessionAccount {
   identification_hash?: string;
   identification_hashes?: string[];
   account_id?: { iban?: string; other?: { identification?: string } };
-  currency: string;
+  currency?: string;          // most banks return this; a few don't — keep optional
   name?: string;
   product?: string;
   account_type?: string;
+  cash_account_type?: string;
 }
 
+/**
+ * Enable Banking's GET /sessions returns two parallel arrays:
+ *   - `accounts`:      bare UID strings (the only field always present).
+ *   - `accounts_data`: detail objects whose `uid` matches the strings above.
+ * Some ASPSPs only populate one of them, so callers must handle both shapes.
+ *
+ * Earlier we typed `accounts` as detail objects and then crashed with
+ * `a.uid.slice(...)` on a string. Fixed for real now.
+ */
 export interface Session {
   session_id: string;
   status: string;
-  accounts: SessionAccount[];
-  accounts_data?: Array<{ uid: string; account_id?: { iban?: string }; currency: string; name?: string }>;
+  accounts: string[];
+  accounts_data?: SessionAccount[];
 }
 
 /** Exchange the code returned by the consent callback for a session + accounts. */
@@ -228,6 +238,23 @@ export async function getSession(sessionId: string): Promise<Session | { consent
   const { ok, data, status, text } = await call<Session>(`/sessions/${sessionId}`);
   if (status === 401 || status === 403 || status === 410) return { consentExpired: true };
   if (!ok || !data) throw new Error(`getSession ${status}: ${text?.slice(0, 200) ?? ""}`);
+  return data;
+}
+
+/** Per-account detail fetch. Used as a fallback when /sessions only gives us UID strings. */
+export interface AccountDetailsResp {
+  account?: {
+    name?: string;
+    iban?: string;
+    currency?: string;
+    product?: string;
+    cash_account_type?: string;
+  };
+}
+export async function getAccountDetails(accountUid: string): Promise<AccountDetailsResp | { consentExpired: true }> {
+  const { ok, data, status, text } = await call<AccountDetailsResp>(`/accounts/${accountUid}/details`);
+  if (status === 401 || status === 403 || status === 410) return { consentExpired: true };
+  if (!ok || !data) throw new Error(`getAccountDetails ${status}: ${text?.slice(0, 200) ?? ""}`);
   return data;
 }
 

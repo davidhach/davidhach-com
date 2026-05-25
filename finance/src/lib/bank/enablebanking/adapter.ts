@@ -19,19 +19,22 @@ export const enableBankingAdapter: BankAdapter = {
     if (!connection.requisitionId) {
       throw new Error("Enable Banking connection missing session id");
     }
-    // Confirm the session still has accounts (also gives us the canonical list
-    // in case the user revoked one at the bank).
+    // Confirm the session is still valid + pull the canonical UID list.
+    //
+    // Enable Banking returns `session.accounts` as a string[] of UIDs and the
+    // detail objects in `session.accounts_data`. We take UIDs from whichever
+    // is populated — some ASPSPs (N26) give only the UID strings.
     const session = await getSession(connection.requisitionId);
     if (isConsentExpired(session)) {
       return { balances: [], transactions: {}, consentExpired: true };
     }
-    const sessionAccounts =
-      (session.accounts && session.accounts.length > 0)
-        ? session.accounts
-        : (session.accounts_data ?? []).map((a) => ({
-            uid: a.uid, account_id: a.account_id, currency: a.currency, name: a.name,
-          }));
-    const accountIds = sessionAccounts.map((a) => a.uid);
+    const fromStrings = (session.accounts ?? []).filter(
+      (u): u is string => typeof u === "string" && u.length > 0,
+    );
+    const fromData = (session.accounts_data ?? [])
+      .map((a) => a?.uid)
+      .filter((u): u is string => typeof u === "string" && u.length > 0);
+    const accountIds = fromStrings.length > 0 ? fromStrings : fromData;
     if (accountIds.length === 0) return { balances: [], transactions: {} };
 
     // Sync window: 30 days back. Free tier quota is generous enough; this still
