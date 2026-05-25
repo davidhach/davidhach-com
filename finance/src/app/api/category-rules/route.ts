@@ -34,10 +34,11 @@ export async function POST(req: NextRequest) {
     const owns = await prisma.category.count({ where: { id: data.categoryId, userId } });
     if (!owns) return err("Category not found", 404);
 
+    const matchType = data.matchType ?? "MERCHANT_EXACT";
     const pattern = data.pattern.toLowerCase();
     const rule = await prisma.categoryRule.upsert({
-      where: { userId_matchType_pattern: { userId, matchType: data.matchType, pattern } },
-      create: { userId, matchType: data.matchType, pattern, categoryId: data.categoryId, priority: data.priority ?? 0 },
+      where: { userId_matchType_pattern: { userId, matchType, pattern } },
+      create: { userId, matchType, pattern, categoryId: data.categoryId, priority: data.priority ?? 0 },
       update: { categoryId: data.categoryId, priority: data.priority ?? undefined },
     });
 
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     if (data.backfill) {
       backfilled = await backfillRule({
         userId,
-        matchType: data.matchType,
+        matchType,
         pattern,
         categoryId: data.categoryId,
         onlyUncategorized: data.onlyUncategorized,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ZodError, type ZodType } from "zod";
+import { z, ZodError } from "zod";
 
 export function ok<T>(data: T, init?: ResponseInit) {
   return NextResponse.json(data, init);
@@ -9,7 +9,7 @@ export function err(message: string, status = 400, extra?: object) {
   return NextResponse.json({ error: message, ...extra }, { status });
 }
 
-export async function parseBody<T>(req: Request, schema: ZodType<T>): Promise<T> {
+export async function parseBody<S extends z.ZodTypeAny>(req: Request, schema: S): Promise<z.infer<S>> {
   let body: unknown;
   try {
     body = await req.json();
@@ -17,7 +17,7 @@ export async function parseBody<T>(req: Request, schema: ZodType<T>): Promise<T>
     throw new HttpError(400, "Invalid JSON body");
   }
   try {
-    return schema.parse(body);
+    return schema.parse(body) as z.infer<S>;
   } catch (e) {
     if (e instanceof ZodError) throw new HttpError(422, "Validation failed", { issues: e.errors });
     throw e;
