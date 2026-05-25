@@ -72,31 +72,54 @@ export async function runSync(connectionId: string): Promise<SyncOutcome> {
       return { connectionId, balanceUpdates: 0, transactionsInserted: 0, status: "consent_expired" };
     }
 
+    // Per-link processing is wrapped per-iteration so a transient hiccup on
+    // ONE balance (e.g. a flaky CoinGecko response inside the auto-asset
+    // upsert) never blocks the whole connection from going ACTIVE. The
+    // adapter itself already succeeded — that's what we promise.
     let balanceUpdates = 0;
+    const warnings: string[] = [];
     for (const bal of result.balances) {
       const link = links.find((l) => l.externalId === bal.externalId);
       if (!link) continue;
-      await prisma.bankAccountLink.update({
-        where: { id: link.id },
-        data: { lastBalance: bal.amount.toFixed(2), lastBalanceAt: bal.asOf, currency: bal.currency },
-      });
-      // Surface the balance as a real net-worth-counted Asset. This is what
-      // makes the dashboard reflect connected balances. Idempotent: matched by
-      // managedByLinkId, so re-syncs UPDATE the same Asset instead of dup'ing.
-      await upsertManagedAsset({ userId: conn.userId, provider: conn.provider, link, bal });
-      balanceUpdates++;
+      try {
+        await prisma.bankAccountLink.update({
+          where: { id: link.id },
+          data: { lastBalance: bal.amount.toFixed(2), lastBalanceAt: bal.asOf, currency: bal.currency },
+        });
+        // Surface the balance as a real net-worth-counted Asset. Idempotent:
+        // matched by managedByLinkId, so re-syncs UPDATE the same Asset.
+        await upsertManagedAsset({ userId: conn.userId, provider: conn.provider, link, bal });
+        balanceUpdates++;
+      } catch (e) {
+        const msg = (e as Error).message ?? "unknown";
+        console.error("link processing failed", link.id, msg);
+        warnings.push(`${link.externalId.slice(0, 8)}…: ${msg}`);
+      }
     }
 
     let txInserted = 0;
     for (const [externalId, txns] of Object.entries(result.transactions)) {
       const link = links.find((l) => l.externalId === externalId);
       if (!link) continue;
-      txInserted += await persistTransactions(conn.userId, link.finAccountId, txns);
+      try {
+        txInserted += await persistTransactions(conn.userId, link.finAccountId, txns);
+      } catch (e) {
+        const msg = (e as Error).message ?? "unknown";
+        console.error("persistTransactions failed", link.id, msg);
+        warnings.push(`tx ${link.externalId.slice(0, 8)}…: ${msg}`);
+      }
     }
 
+    // Mark ACTIVE + clear any stale lastError. The presence of per-link
+    // warnings doesn't demote the connection — they go into lastError as a
+    // non-blocking note so the user knows but the row reads "active".
     await prisma.bankConnection.update({
       where: { id: connectionId },
-      data: { status: "ACTIVE", lastSyncedAt: new Date(), lastError: null },
+      data: {
+        status: "ACTIVE",
+        lastSyncedAt: new Date(),
+        lastError: warnings.length > 0 ? `Sync OK with warnings — ${warnings.join("; ").slice(0, 500)}` : null,
+      },
     });
     await recordAudit({
       userId: conn.userId, action: "bank.sync.ok",
