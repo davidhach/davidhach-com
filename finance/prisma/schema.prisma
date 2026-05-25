@@ -400,6 +400,13 @@ model Transaction {
   confidence      Float?       // 0..1 from OCR; null = manual
   reviewed        Boolean      @default(false)
   duplicateOfId   String?
+  // Internal transfers + card settlements: when this txn is paired with the
+  // matching other-side txn we store the FK here on BOTH sides, and set
+  // excludeFromTotals so the spending/income widgets skip them. transferKind
+  // distinguishes a plain transfer from a card-payment settlement.
+  transferPairId  String?
+  transferKind    TransferKind?
+  excludeFromTotals Boolean    @default(false)
   note            String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -410,11 +417,19 @@ model Transaction {
   ocrExtraction   OcrExtraction? @relation(fields: [ocrExtractionId], references: [id], onDelete: SetNull)
   duplicateOf     Transaction? @relation("DuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
   duplicates      Transaction[] @relation("DuplicateOf")
+  transferPair    Transaction? @relation("TransferPair", fields: [transferPairId], references: [id], onDelete: SetNull)
+  transferPairs   Transaction[] @relation("TransferPair")
   tags            TagOnTransaction[]
 
   @@index([userId, date])
   @@index([finAccountId, date])
   @@index([merchantNormalized])
+  @@index([transferPairId])
+}
+
+enum TransferKind {
+  TRANSFER       // internal transfer between two of the user's accounts (same entity)
+  CARD_PAYMENT   // settlement of a credit-card balance from a checking account
 }
 
 enum TxnStatus {

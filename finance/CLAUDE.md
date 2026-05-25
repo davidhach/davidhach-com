@@ -91,6 +91,16 @@ financial data — security and data integrity come before everything else.**
   ISIN and no resolved ticker — the server writes `symbol = ISIN`, leaves `priceSource`
   null, and the client fires `POST /api/assets/[id]/resolve` in the background. The
   /assets row shows a "Resolving…" / "Resolve" affordance for assets in that state.
+- **Transfers + card settlements:** `Transaction.transferPairId` self-FK + `transferKind`
+  enum (`TRANSFER` | `CARD_PAYMENT`) + `excludeFromTotals` bool. `src/lib/transfer-detect.ts`
+  scans for outflow/inflow pairs (same entity, different accounts, ±5d, same amount
+  with FX tolerance). Surfaced as suggestions on /spending; the user confirms via
+  `/api/transfers/confirm` which pairs both rows and sets the exclude flag. Manual
+  `/api/transfers/unpair` reverses it. Spending/income totals always skip excluded txns.
+- **Default merchant→category rules** seeded by `POST /api/categories/seed-defaults`
+  (DEFAULT_CATEGORIES + DEFAULT_RULES in `src/lib/default-categories.ts`). Idempotent;
+  also backfills uncategorised txns. New bank-synced txns auto-categorise via the
+  existing `applyRulesToTransaction` hook in the orchestrator.
 - **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
   a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
   cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback

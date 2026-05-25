@@ -125,8 +125,6 @@ export default async function DashboardPage({
         <div className="flex flex-col items-end gap-2">
           <EntityFilter entities={entitiesRaw} current={entityId} />
           <div className="flex gap-2">
-            <Link href="/update"><Button variant="secondary">Update values</Button></Link>
-            <Link href="/statements"><Button variant="secondary">Upload statement</Button></Link>
             <Link href="/assets"><Button>Add asset</Button></Link>
           </div>
         </div>

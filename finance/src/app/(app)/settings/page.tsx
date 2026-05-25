@@ -3,18 +3,24 @@ import { prisma } from "@/lib/db";
 import { Card, Badge } from "@/components/ui/primitives";
 import { CurrencyPicker } from "@/components/currency-picker";
 import { EntitiesManager } from "@/components/entities-manager";
+import { CategoriesManager } from "@/components/categories-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const userId = await requireUserId();
-  const [user, entities, categoriesCount, lastBackup, bankCount] = await Promise.all([
+  const [user, entities, categories, lastBackup, bankCount] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.entity.findMany({ where: { userId } }),
-    prisma.category.count({ where: { userId } }),
+    prisma.category.findMany({
+      where: { userId },
+      include: { _count: { select: { transactions: true } } },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+    }),
     prisma.backupMetadata.findFirst({ orderBy: { date: "desc" } }),
     prisma.bankConnection.count({ where: { userId } }),
   ]);
+  const categoriesCount = categories.length;
 
   return (
     <div className="space-y-5">
@@ -39,6 +45,23 @@ export default async function SettingsPage() {
         </p>
         <EntitiesManager
           initial={entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, currency: e.currency }))}
+        />
+      </Card>
+
+      <Card id="categories">
+        <h2 className="font-medium text-sm mb-3">Categories</h2>
+        <p className="text-xs text-muted mb-4">
+          Categories label your transactions. Edit a transaction inline on the{" "}
+          <a href="/spending" className="underline">Spending</a> page to auto-create a rule
+          that applies to similar future transactions.
+        </p>
+        <CategoriesManager
+          initial={categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            kind: c.kind as "INCOME" | "EXPENSE" | "ASSET" | "LIABILITY",
+            txCount: c._count.transactions,
+          }))}
         />
       </Card>
 
