@@ -13,6 +13,7 @@ import { PeriodFilter, type PeriodPreset } from "@/components/period-filter";
 import { TransferSuggestions } from "@/components/transfer-suggestions";
 import { TransferLine } from "@/components/transfer-line";
 import { ConnectionHealthBanner } from "@/components/connection-health";
+import { convertSafe } from "@/lib/fx";
 
 export const dynamic = "force-dynamic";
 
@@ -88,13 +89,23 @@ export default async function SpendingPage({
   const spendList:  typeof txs = [];
   const incomeList: typeof txs = [];
   const transferList: typeof txs = [];
+  // Currencies we couldn't convert today — surfaced as a banner so the user
+  // knows which holdings were excluded. Without convertSafe, a 5,000,000 IDR
+  // transaction would be summed into the EUR total as €5,000,000.
+  const fxFailed = new Set<string>();
 
   for (const t of txs) {
     if (t.excludeFromTotals || t.transferKind) {
       transferList.push(t);
       continue;
     }
-    const amt = new Decimal(t.amount.toString());
+    // Convert into the user's display currency. If FX is unavailable for this
+    // row's currency, EXCLUDE it from totals (the banner tells the user why).
+    const conv = await convertSafe({
+      amount: t.amount.toString(), from: t.currency, to: user.displayCurrency, date: t.date,
+    });
+    if (!conv.ok) { fxFailed.add(t.currency); continue; }
+    const amt = conv.amount;
     const monthKey = format(t.date, "yyyy-MM");
     const mEntry = byMonth.get(monthKey) ?? { month: monthKey, spending: new Decimal(0), income: new Decimal(0) };
     if (amt.lt(0)) {
@@ -141,6 +152,13 @@ export default async function SpendingPage({
       </header>
 
       <ConnectionHealthBanner userId={userId} />
+      {fxFailed.size > 0 && (
+        <div className="text-xs px-3 py-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-yellow-700">
+          <strong>FX rate unavailable for:</strong> {[...fxFailed].join(", ")}.{" "}
+          Transactions in {fxFailed.size === 1 ? "that currency are" : "those currencies are"}{" "}
+          excluded from the totals until rates load. Use the Refresh button on the dashboard to retry now.
+        </div>
+      )}
       <TransferSuggestions />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

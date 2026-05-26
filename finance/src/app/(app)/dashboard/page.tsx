@@ -8,6 +8,7 @@ import { NetWorthChart } from "@/components/net-worth-chart";
 import { AllocationPie } from "@/components/allocation-pie";
 import { EntityFilter } from "@/components/entity-filter";
 import { ConnectionHealthBanner } from "@/components/connection-health";
+import { DashboardRefresh } from "@/components/dashboard-refresh";
 import { formatMoney, formatPercent, pctChange } from "@/lib/utils";
 import { convertSafe } from "@/lib/fx";
 import { Decimal } from "decimal.js";
@@ -98,6 +99,29 @@ export default async function DashboardPage({
     .map(([name, v]) => ({ name: prettyClass(name), value: v.toNumber() }))
     .filter((d) => d.value > 0);
 
+  // "Last refreshed": most recent of any priced asset, any synced connection,
+  // or any cached FX rate — whichever the user touched most recently. Drives
+  // the timestamp on the Refresh button.
+  const [latestPriced, latestSynced, latestFx] = await Promise.all([
+    prisma.asset.findFirst({
+      where: { userId, lastPricedAt: { not: null } },
+      orderBy: { lastPricedAt: "desc" },
+      select: { lastPricedAt: true },
+    }),
+    prisma.bankConnection.findFirst({
+      where: { userId, lastSyncedAt: { not: null } },
+      orderBy: { lastSyncedAt: "desc" },
+      select: { lastSyncedAt: true },
+    }),
+    prisma.fxRate.findFirst({ orderBy: { date: "desc" }, select: { date: true } }),
+  ]);
+  const refreshCandidates = [
+    latestPriced?.lastPricedAt, latestSynced?.lastSyncedAt, latestFx?.date,
+  ].filter((d): d is Date => d != null);
+  const lastRefreshedAt = refreshCandidates.length
+    ? new Date(Math.max(...refreshCandidates.map((d) => d.getTime()))).toISOString()
+    : null;
+
   return (
     <div className="space-y-6">
       <ConnectionHealthBanner userId={userId} />
@@ -126,7 +150,8 @@ export default async function DashboardPage({
         </div>
         <div className="flex flex-col items-end gap-2">
           <EntityFilter entities={entitiesRaw} current={entityId} />
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <DashboardRefresh lastRefreshedAt={lastRefreshedAt} />
             <Link href="/assets"><Button>Add asset</Button></Link>
           </div>
         </div>

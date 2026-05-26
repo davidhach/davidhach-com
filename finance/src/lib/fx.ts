@@ -1,12 +1,22 @@
 /**
  * FX cache + safe conversion.
  *
- * Hard rule: `convertSafe` MUST NEVER throw. The dashboard, the series builder,
- * and the spending page all call into FX; one missing rate cannot 500 the whole
- * page. Missing-rate fallback order:
- *   1. Use the most recent cached rate for that quote, regardless of date.
+ * Hard rule: `convertSafe` MUST NEVER throw AND MUST NEVER fabricate a rate.
+ * If we can't find a real rate (cached, on-demand-fetched, or any historical
+ * row for the same pair), it returns ok:false and the original amount
+ * untouched. Callers MUST check `ok` and skip / surface a warning — never
+ * sum a foreign amount into the display-currency total.
+ *
+ * Missing-rate fallback order:
+ *   1. Use the most recent cached rate for that quote (any prior date).
  *   2. On-demand single-pair fetch (`ensureFxRate`) for a closer date.
- *   3. Fall through: return the original amount + ok:false + reason.
+ *   3. Any cached rate for that pair, even from after the requested date
+ *      (marked stale:true).
+ *   4. Fall through: return original amount + ok:false + reason.
+ *
+ * Data sources (both free, no key required):
+ *   - PRIMARY:  open.er-api.com — broad coverage (~161 currencies inc IDR/THB).
+ *   - FALLBACK: frankfurter.app — ECB rates, narrower coverage but reliable.
  *
  * `convert` is kept as a thin wrapper that throws — only the cron uses it,
  * and only because that's the cron's idiomatic style. New callers should use
@@ -14,42 +24,78 @@
  */
 import { prisma } from "./db";
 import { Decimal } from "decimal.js";
+import { fetchWithTimeout } from "./net";
 
 const BASE = process.env.FX_BASE ?? "USD";
 const ONE = new Decimal(1);
+const FX_TIMEOUT_MS = 5000;
 
-interface RatesPayload {
-  base: string;
-  date: string; // YYYY-MM-DD
+// ─── External providers ────────────────────────────────────────────────────
+//
+// Both providers normalize to `{ rates: { QUOTE: number } }` shape after parse.
+// Returns null on any failure so the caller can fall through to the next.
+
+interface ProviderRates {
   rates: Record<string, number>;
+  source: string;
+}
+
+/** open.er-api.com — broad coverage incl. IDR/THB. Latest only (no history). */
+async function fetchOpenEr(base: string): Promise<ProviderRates | null> {
+  try {
+    const url = `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`;
+    const res = await fetchWithTimeout(url, { timeoutMs: FX_TIMEOUT_MS, headers: { "User-Agent": "ledger-app" } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { result?: string; rates?: Record<string, number> };
+    if (json.result !== "success" || !json.rates) return null;
+    return { rates: json.rates, source: "open.er-api" };
+  } catch { return null; }
+}
+
+/** frankfurter.app — ECB rates. Narrower (no IDR/THB) but supports historical dates. */
+async function fetchFrankfurter(base: string, date?: Date): Promise<ProviderRates | null> {
+  try {
+    const path = date ? date.toISOString().slice(0, 10) : "latest";
+    const url = `https://api.frankfurter.app/${path}?from=${encodeURIComponent(base)}`;
+    const res = await fetchWithTimeout(url, { timeoutMs: FX_TIMEOUT_MS, headers: { "User-Agent": "ledger-app" } });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { rates?: Record<string, number> };
+    if (!json.rates) return null;
+    return { rates: json.rates, source: "frankfurter" };
+  } catch { return null; }
 }
 
 // ─── Cache refresh ─────────────────────────────────────────────────────────
 
-/** Daily cron refresh — full set of rates from exchangerate.host. */
+/** Daily cron refresh — pulls the full set from the primary, falls back if it's down. */
 export async function refreshFxRates(forDate?: Date): Promise<number> {
   const date = forDate ?? new Date();
   const dateStr = date.toISOString().slice(0, 10);
-  const url = `https://api.exchangerate.host/${dateStr}?base=${encodeURIComponent(BASE)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`FX fetch failed: ${res.status}`);
-  const payload = (await res.json()) as RatesPayload;
-  const entries = Object.entries(payload.rates ?? {});
+  const day = new Date(dateStr);
+
+  // Today's snapshot — primary first, fallback if it's down. We don't try to
+  // backfill historical dates here (open-er-api is latest-only); the cron is
+  // best-effort daily, and convertSafe handles stale-rate fallback per row.
+  const primary = await fetchOpenEr(BASE);
+  const fallback = primary ?? await fetchFrankfurter(BASE);
+  if (!fallback) {
+    throw new Error("All FX providers failed (open.er-api + frankfurter)");
+  }
+  const entries = Object.entries(fallback.rates).filter(([, r]) => Number.isFinite(r) && r > 0);
   await prisma.$transaction(
     entries.map(([quote, rate]) =>
       prisma.fxRate.upsert({
-        where: { date_base_quote: { date: new Date(dateStr), base: BASE, quote } },
-        create: { date: new Date(dateStr), base: BASE, quote, rate: new Decimal(rate), source: "exchangerate.host" },
-        update: { rate: new Decimal(rate), source: "exchangerate.host" },
+        where: { date_base_quote: { date: day, base: BASE, quote } },
+        create: { date: day, base: BASE, quote, rate: new Decimal(rate), source: fallback.source },
+        update: { rate: new Decimal(rate), source: fallback.source },
       }),
     ),
   );
 
-  // Best-effort: also make sure every currency a user actually holds has at
-  // least one rate row. If exchangerate.host's response is missing one (rare
-  // but possible for thinly-traded codes), try a single-pair fetch for it.
+  // Best-effort: if the primary set missed a currency the user actually holds
+  // (rare; e.g. a thinly-traded code), try a single-pair fetch.
   const used = await usedCurrencies();
-  const wanted = used.filter((c) => c !== BASE && !payload.rates?.[c]);
+  const wanted = used.filter((c) => c !== BASE && !fallback.rates[c]);
   for (const q of wanted) {
     await ensureFxRate(q, date).catch(() => {});
   }
@@ -82,27 +128,29 @@ async function usedCurrencies(): Promise<string[]> {
 export async function ensureFxRate(quote: string, date: Date = new Date()) {
   if (quote === BASE) return null;
   const dateStr = date.toISOString().slice(0, 10);
+  const day = new Date(dateStr);
   // If we already have something for that day, no-op.
   const existing = await prisma.fxRate.findUnique({
-    where: { date_base_quote: { date: new Date(dateStr), base: BASE, quote } },
+    where: { date_base_quote: { date: day, base: BASE, quote } },
   });
   if (existing) return existing;
 
-  try {
-    const url = `https://api.exchangerate.host/${dateStr}?base=${encodeURIComponent(BASE)}&symbols=${encodeURIComponent(quote)}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const payload = (await res.json()) as RatesPayload;
-    const rate = payload.rates?.[quote];
-    if (rate == null || !Number.isFinite(rate)) return null;
-    return prisma.fxRate.upsert({
-      where: { date_base_quote: { date: new Date(dateStr), base: BASE, quote } },
-      create: { date: new Date(dateStr), base: BASE, quote, rate: new Decimal(rate), source: "exchangerate.host" },
-      update: { rate: new Decimal(rate), source: "exchangerate.host" },
-    });
-  } catch {
-    return null;
-  }
+  // Try primary, then fallback. Both are single-call providers — we pull the
+  // full set and pick out the one quote we want. Cheaper than caching only
+  // what's asked because most calls are for the same handful of currencies.
+  const isToday = dateStr === new Date().toISOString().slice(0, 10);
+  // open-er-api is latest-only; for historical dates, skip straight to frankfurter.
+  const provider = isToday
+    ? (await fetchOpenEr(BASE)) ?? await fetchFrankfurter(BASE, day)
+    : await fetchFrankfurter(BASE, day);
+  if (!provider) return null;
+  const rate = provider.rates[quote];
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) return null;
+  return prisma.fxRate.upsert({
+    where: { date_base_quote: { date: day, base: BASE, quote } },
+    create: { date: day, base: BASE, quote, rate: new Decimal(rate), source: provider.source },
+    update: { rate: new Decimal(rate), source: provider.source },
+  });
 }
 
 // ─── Conversion ────────────────────────────────────────────────────────────
@@ -117,11 +165,15 @@ export interface ConvertResult {
 }
 
 /**
- * Resilient currency conversion. NEVER throws.
+ * Resilient currency conversion. NEVER throws AND NEVER fabricates a rate.
  *
- * If a rate is unavailable we return `{ ok: false, amount: <input>, reason }`
- * so the caller can render a "FX unavailable" indicator instead of crashing.
- * Same-currency conversions are free and always ok.
+ * INVARIANT: when `ok` is false, `amount` equals the input amount (no
+ * silent 1:1 fallback, no raw-passthrough as if it were converted). Callers
+ * MUST check `ok` — summing the returned amount into a display-currency
+ * total when ok:false would be a "5,000,000 IDR shown as €5,000,000" bug.
+ *
+ * Same-currency conversions return ok:true (no FX needed). Real conversion
+ * requires real cached rates for BOTH legs (or one leg equal to BASE).
  */
 export async function convertSafe(args: {
   amount: Decimal | string | number;

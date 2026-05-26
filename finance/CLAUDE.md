@@ -137,11 +137,23 @@ financial data — security and data integrity come before everything else.**
   with per-row "Retry sync" and "Reconnect at bank" buttons. Reconnect restarts the
   Enable Banking consent for the SAME institution as the failing row; the new
   connection links in alongside, the user disconnects the old one manually.
-- **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` never throws on
-  a missing rate; the dashboard, series, and spending all use it. Missing-rate path:
-  cached prior date → on-demand single-pair `ensureFxRate()` → any-direction fallback
-  → return ok:false + reason. The dashboard renders a yellow banner listing affected
-  currencies. The daily cron also tops up any currency the user actually holds.
+- **FX conversion is resilient.** `convertSafe()` in `src/lib/fx.ts` NEVER throws AND
+  NEVER fabricates a rate — when `ok` is false the returned amount equals the input
+  amount (no silent 1:1 passthrough). Every aggregator (net-worth, series, spending
+  page, dashboard widget, transfer-detect, price-refresh) MUST check `ok` and skip
+  the row; the dashboard + spending page render a yellow "FX unavailable for X"
+  banner. Provider switched 2026-05 from exchangerate.host (added paywall, returned
+  nothing) to **open.er-api.com** (primary, ~161 currencies inc IDR/THB) with
+  **api.frankfurter.app** as fallback (ECB rates, narrower coverage but reliable;
+  also used for historical dates since open-er-api is latest-only). Both keyless.
+  Daily cron + on-demand `ensureFxRate()` both use the new providers.
+- **Manual refresh button** on the dashboard (`src/components/dashboard-refresh.tsx`
+  + `POST /api/refresh`) does for one click what the daily cron does, scoped to the
+  caller via `withAuth`: refresh FX, refresh prices for THIS user's non-manual
+  assets only, sync THIS user's ACTIVE BankConnections. NOT a cron-secret route —
+  user-triggered, audit-logged. Returns a per-step summary the client renders, and
+  the page-render computes "last refreshed" from max(latest Asset.lastPricedAt,
+  latest BankConnection.lastSyncedAt, latest FxRate.date).
 - **Quantity-based assets** (STOCKS / CRYPTO with a non-manual `priceSource`): the
   authoritative ledger is `AssetTransaction` (BUY / SELL / TRANSFER_IN / SPLIT / DIVIDEND).
   `Asset.quantity` + `Asset.currentValue` are denormalised caches recomputed on every
