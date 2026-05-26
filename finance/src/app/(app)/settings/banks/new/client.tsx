@@ -169,8 +169,8 @@ function ProviderPicker({ onPick, enableBankingConfigured, enableBankingEnv }: {
       desc: "Upload a transactions export from your bank or card. Each row becomes a Transaction. The universal fallback when a bank isn't on Enable Banking." },
     { id: "depot", title: "Broker depot CSV — current positions",
       desc: "Upload a positions export from your broker (Comdirect, Consors, Trade Republic). Each row becomes an Asset with its quantity. PSD2 can't expose depots, so CSV is the realistic path." },
-    { id: "btc", title: "Bitcoin address (balance only)",
-      desc: "Paste a public BTC address. We read its balance from mempool.space daily. No private keys ever leave you." },
+    { id: "btc", title: "Bitcoin address or xpub (balance only)",
+      desc: "Paste a single public BTC address OR an extended public key (xpub/ypub/zpub) for a whole HD wallet. Single addresses show just that address's funds; an xpub aggregates across every derived address. Read-only via mempool.space." },
     { id: "eth", title: "Ethereum address (balance only)",
       desc: "Paste a public ETH address. Read via a public RPC. No private keys, no transactions written." },
   ];
@@ -377,17 +377,20 @@ function CryptoForm({
     <div className="space-y-3">
       <button type="button" onClick={onBack} className="text-xs text-muted underline">← Back</button>
       <HelpBox>
-        Paste only your <strong>public</strong> {isBtc ? "BTC" : "ETH"} address. We can&apos;t spend
-        from it — we only read its balance.{" "}
+        Paste only your <strong>public</strong> {isBtc ? "BTC address or extended public key (xpub/ypub/zpub)" : "ETH address"}.
+        We can&apos;t spend from it — we only read its balance.{" "}
         {isBtc
-          ? <>In most wallets: <em>Receive</em> → copy the address starting with <code>bc1</code> or <code>1</code>.</>
-          : <>In MetaMask/Ledger: click your account name to copy the <code>0x…</code> address.</>}
-        {" "}<strong>Never paste a seed phrase or private key.</strong>
+          ? <>For a <strong>single address</strong> (cold storage, watch-only): in your wallet, <em>Receive</em> → copy the <code>bc1…</code> / <code>1…</code> address.
+              For a <strong>whole HD wallet</strong>: export the account-level <code>xpub</code>/<code>ypub</code>/<code>zpub</code>
+              (Electrum: <em>Wallet → Information</em>; Sparrow: <em>Settings → Keystore</em>; Ledger Live: account → <em>Advanced</em>).
+              A single address only shows that one address&apos;s balance — an xpub aggregates the whole wallet.</>
+          : <>In MetaMask/Ledger: click your account name to copy the <code>0x…</code> address. (ETH has one account per address — no xpub needed.)</>}
+        {" "}<strong>Never paste a seed phrase or extended PRIVATE key (xprv/yprv/zprv).</strong>
       </HelpBox>
       <div>
-        <Label>{isBtc ? "Bitcoin address (public)" : "Ethereum address (public)"}</Label>
+        <Label>{isBtc ? "Bitcoin address or xpub (public)" : "Ethereum address (public)"}</Label>
         <Input value={address} onChange={(e) => setAddress(e.target.value)}
-          placeholder={isBtc ? "bc1q…" : "0x…"} autoFocus />
+          placeholder={isBtc ? "bc1q… or xpub6…" : "0x…"} autoFocus />
       </div>
       <div>
         <Label>Account to map this to</Label>

@@ -121,6 +121,18 @@ financial data — security and data integrity come before everything else.**
 - **ETH adapter** tries `ETH_RPC_URL` (if set) then publicnode → llamarpc → ankr,
   each through `fetchWithTimeout(4s)`. Real RPC errors surface in the connection's
   `lastError` instead of a generic 500. Wei→ETH via BigInt to keep sub-gwei precision.
+- **BTC adapter** accepts EITHER a single address OR an extended public key
+  (xpub/ypub/zpub + multisig Ypub/Zpub). `isExtendedPublicKey()` routes xpubs to
+  mempool.space's `/api/v1/xpub/{xpub}` which aggregates balance across the entire
+  HD derivation; plain addresses still hit `/api/address/{addr}`. Both return the
+  same `chain_stats.funded_txo_sum − spent_txo_sum` shape. **Honest-error rule:**
+  a 404 on a plain address = unfunded (return 0); a 404 on an xpub = misformatted/
+  unsupported (THROW so it lands in `lastError` instead of a silent $0). All
+  external fetches go through `fetchWithTimeout`. `isExtendedPrivateKey()` refuses
+  xprv/yprv/zprv at the adapter as defence-in-depth; `/api/banks/crypto` also
+  rejects private keys AND BIP39 seed phrases (12/15/18/21/24 lowercase words)
+  before storing anything. Initial sync errors now return 502 with the real
+  `lastError` instead of a 201 that hides a failed connection.
 - **One-sided self-transfers** (Wise / brokerage / own accounts not connected via PSD2):
   `TransferRule` table (matchType MERCHANT_EXACT / IBAN_EXACT / DESCRIPTION_CONTAINS).
   `src/lib/own-account-transfers.ts` derives a per-user "own account" pattern set from
