@@ -55,12 +55,13 @@
     if (Number.isNaN(d.getTime())) return "";
     const diff = Math.floor((Date.now() - d.getTime()) / 1000);
     const days = Math.floor(diff / 86400);
+    const ago = (n, unit) => n + " " + unit + (n === 1 ? "" : "s") + " ago";
     if (days <= 0) return "Today";
     if (days === 1) return "Yesterday";
-    if (days < 7) return days + " days ago";
-    if (days < 30) return Math.floor(days / 7) + " weeks ago";
-    if (days < 365) return Math.floor(days / 30) + " months ago";
-    return Math.floor(days / 365) + " years ago";
+    if (days < 7) return ago(days, "day");
+    if (days < 30) return ago(Math.floor(days / 7), "week");
+    if (days < 365) return ago(Math.floor(days / 30), "month");
+    return ago(Math.floor(days / 365), "year");
   };
 
   const renderVideo = (data) => {
