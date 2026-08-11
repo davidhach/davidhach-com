@@ -115,9 +115,9 @@
   --text: #F5F5F4;
   --text-2: #A8A29E;
   --text-3: #78716C;
-  --accent: #FF6A1A;
-  --accent-hover: #FF8742;
-  --accent-muted: rgba(255, 106, 26, 0.12);
+  --accent: #F5F5F4;
+  --accent-hover: #E7E5E4;
+  --accent-muted: rgba(245, 245, 244, 0.08);
   --accent-on: #0A0A0A;
 
   /* Mode-specific values */
@@ -144,7 +144,8 @@
   --text: #0A0A0A;
   --text-2: #525252;
   --text-3: #737373;
-  /* Brand rule: in light mode the accent IS the primary text color */
+  /* Brand rule: the accent IS the primary text color in both modes — the page
+     is monochrome; the CLAD banner's lime is the only chroma. */
   --accent: #0A0A0A;
   --accent-hover: #1F1F1F;
   --accent-muted: rgba(10, 10, 10, 0.06);
@@ -175,6 +176,12 @@
 
   --container: 440px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* CLAD banner — brand-fixed, identical in both themes */
+  --clad-ground: #282C20;
+  --clad-lime: #D2FF03;
+  --clad-ink: #0F0F0E;
+  --clad-paper: #FAFAF7;
 }
 
 /* ── Reset ─────────────────────────────────────────────── */
@@ -312,6 +319,65 @@ body {
 .theme-toggle .icon { display: none; }
 [data-theme="dark"] .theme-toggle .icon-sun { display: block; }
 [data-theme="light"] .theme-toggle .icon-moon { display: block; }
+
+/* ── CLAD banner (brand-fixed; does not respond to theme) ─ */
+.banner-clad {
+  display: block;
+  background: var(--clad-ground);
+  border: 1px solid var(--border);       /* only adaptive property: defines the edge on #0A0A0A */
+  border-radius: 16px;
+  padding: 28px 24px;
+}
+/* On the light ground the card already separates itself; a light hairline
+   would ring the dark green with a halo, so drop it. */
+[data-theme="light"] .banner-clad { border-color: transparent; }
+@media (min-width: 720px) {
+  .banner-clad { padding: 32px 28px; }
+}
+.banner-clad:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.clad-headline {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(26px, 7vw, 30px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  color: var(--clad-paper);
+}
+.clad-keep { white-space: nowrap; }
+.clad-dot {
+  display: inline-block;
+  width: 0.16em;
+  height: 0.16em;
+  margin-left: 0.08em;
+  background: var(--clad-lime);
+}
+.clad-body {
+  margin: 0 0 18px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: rgba(250, 250, 247, 0.72);      /* Paper at opacity — CLAD's "no greys" rule */
+  max-width: 34ch;
+}
+.clad-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--clad-ink);
+  background: var(--clad-lime);
+  border: 1.5px solid var(--clad-ink);
+  border-radius: 8px;
+  padding: 12px 20px;
+  box-shadow: 4px 4px 0 0 var(--clad-ink);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.banner-clad:hover .clad-cta { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 var(--clad-ink); }
+.banner-clad:active .clad-cta { transform: translate(2px, 2px); box-shadow: 2px 2px 0 0 var(--clad-ink); }
 
 /* ── Card primitives ───────────────────────────────────── */
 .card {
@@ -584,7 +650,6 @@ body {
 }
 .lab-status[hidden] { display: none; }
 .lab-status[data-state="success"] { color: var(--text); font-weight: 500; }
-[data-theme="dark"] .lab-status[data-state="success"] { color: var(--accent); }
 .lab-status[data-state="error"] { color: #DC2626; }
 [data-theme="dark"] .lab-status[data-state="error"] { color: #F87171; }
 
@@ -687,5 +752,6 @@ body {
 @media print {
   body { background: #fff; color: #000; }
   .btn-primary { background: #000; color: #fff; }
+  .banner-clad { border: 1px solid #000; }
   .topbar { display: none; }
 }

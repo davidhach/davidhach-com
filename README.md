@@ -56,7 +56,7 @@ That's it. Vercel auto-detects `api/latest-video.js` as a serverless function an
 - On first load: respects `prefers-color-scheme` from the OS.
 - After a manual choice: saved to `localStorage` and respected on every subsequent visit.
 - Hydration runs in `<head>` before paint — no flash of wrong theme.
-- Brand-correct: light mode strips the amber accent entirely (per `brand-identity.md`: light mode hierarchy is structural, never chromatic). Dark mode keeps amber for the Subscribe CTA — the one accent moment.
+- Brand-correct: the page is monochrome in both modes. `--accent` is off-white in dark mode and near-black in light mode — i.e. the accent *is* the primary text color either way, so hierarchy is structural, never chromatic (per `brand-identity.md`). The Subscribe CTA is a filled block of that accent rather than a hue.
 
 ### Newsletter form
 - When `KIT_FORM_ACTION` is `null` (default), the form captures emails to `localStorage` and shows a thanks state — useful while you're still hooking up Kit.
@@ -82,7 +82,8 @@ npx http-server -p 4173
 
 ## Brand notes
 
-- **One accent moment per viewport**: in dark mode, that's the Subscribe CTA. In light mode, accent isn't used at all — buttons are filled near-black.
+- **Monochrome page, one chroma moment**: no hue is used anywhere in the page chrome — in dark mode buttons are filled off-white, in light mode filled near-black. The CLAD banner's lime (`#D2FF03`) is the only chroma on the page, and it's a brand artifact, not a theme colour: the banner renders identically in both modes.
+- **Approved CLAD exception**: the banner's ground is `#282C20`, which the CLAD brand book reserves for footers only. Using it here is a deliberate, user-approved exception — do not "correct" it back later.
 - Type pairing: Instrument Sans for display, Inter for body. Tracking tightened on display sizes (`-0.015em` to `-0.02em`).
 - 8-pt spacing scale, 12px card radius, 999px pill radius.
 - No mixed modes inside one artifact — mode-scoped tokens flip together via `[data-theme="light"|"dark"]`.
