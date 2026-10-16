@@ -418,32 +418,6 @@ body {
 [data-theme="light"] .banner-clad { border-color: transparent; }
 .banner-clad:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Badge, from the letsclad.com hero (.hero-pill): ink pill, paper text,
-   lime dot, letsclad's mobile size. Fits one line on every phone. */
-.clad-pill {
-  display: inline-block;
-  margin: 0 0 14px;
-  padding: 5px 12px 5px 10px;
-  border-radius: 999px;
-  background: var(--clad-ink);
-  color: var(--clad-paper);
-  font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 12.5px;
-  line-height: 1.2;
-  letter-spacing: -0.005em;
-  white-space: nowrap;
-}
-.clad-pill-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 8px;
-  border-radius: 50%;
-  background: var(--clad-lime);
-  vertical-align: 0.08em;
-}
-
 .clad-headline {
   margin: 0;
   font-family: var(--font-display);
