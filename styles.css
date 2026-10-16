@@ -211,11 +211,13 @@
      anything inside a section, so the page reads as two groups.
        page:    nav → content, content → footer   (~13px at 390×664, 23 on a Pro Max)
        section: CLAD group → video group           (~25px at 390×664, 36 on a Pro Max)
+     Everything stays full column width; on short screens these gaps and then
+     the video's height (cropped, never narrowed) give way.
      The section gap does the grouping, so it gets priority; page margins
      give way first on short screens to keep the video large.
        inside a section: label → block 8, block → its button 12 */
-  --space-page: clamp(12px, calc(4dvh - 14px), 28px);
-  --space-section: clamp(14px, calc(4.6dvh - 6px), 36px);
+  --space-page: clamp(8px, calc(4dvh - 14px), 28px);
+  --space-section: clamp(12px, calc(6dvh - 15px), 36px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* CLAD banner — brand-fixed, identical in both themes */
@@ -527,24 +529,20 @@ body {
 }
 .video-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-/* The flexing element. Its natural height is the column's 16:9; it may shrink
-   to 96px. As a size container it lets the frame pick the largest 16:9 box
-   that fits — full width when there's room, narrower and centred when not.
-   Never cropped, never letterboxed. */
+/* The flexing element. Always the full column width, so its edges line up
+   with the CLAD card and both pills. Its height is the column's 16:9 when
+   there's room and gives way on short screens (down to 3:1 on an iPhone SE
+   in Safari); the thumbnail is cropped to fill rather than shrunk. */
 .video-slot {
   flex: 0 1 auto;
   height: calc(var(--col) * 9 / 16);
-  min-height: 96px;
-  container-type: size;
-  display: grid;
-  place-items: center;
+  min-height: calc(var(--col) / 3);
 }
 
 .video-frame {
   position: relative;
   width: 100%;
-  width: min(100cqw, 100cqh * 16 / 9);
-  aspect-ratio: 16 / 9;
+  height: 100%;
   border-radius: 14px;
   overflow: hidden;
   background: var(--surface);
@@ -564,7 +562,10 @@ body {
   width: 100%;
   height: 100%;
   max-width: none;
-  object-fit: cover; /* hq/sd fallbacks are 4:3 letterboxed — cover crops the bars exactly */
+  object-fit: cover; /* also crops the hq/sd fallbacks' 4:3 letterbox bars */
+  /* When the frame is shorter than 16:9, keep a little more of the top:
+     thumbnail titles usually sit in the upper half. */
+  object-position: center 40%;
   opacity: 0;
   transform: scale(1);
   transition: opacity 280ms var(--ease), transform 480ms var(--ease);
