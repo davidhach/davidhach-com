@@ -331,6 +331,14 @@ body {
 [data-theme="light"] .theme-toggle .icon-moon { display: block; }
 
 /* ── CLAD banner (brand-fixed; does not respond to theme) ─ */
+/* Labelled exactly like the video section: shared .eyebrow above the block */
+.clad {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .banner-clad {
   flex: none;
   display: block;
