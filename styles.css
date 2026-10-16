@@ -384,6 +384,14 @@ body {
   font-size: clamp(13px, 100cqi / 24.5, 14.5px);
   line-height: 1.45;
   color: rgba(250, 250, 247, 0.72);      /* Paper at opacity — CLAD's "no greys" rule */
+  /* Justified (Blocksatz) so the body squares off with the headline above.
+     At ~9 word gaps per line, the loosest line opens its gaps by roughly
+     60-90% depending on width; hyphenation (needs <html lang>) recovers
+     some of that whenever a longer word lands at a line end. */
+  text-align: justify;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 7 3 3; /* no stubby splits like "a-" or "-ly" */
   text-wrap: pretty;
 }
 .clad-cta {
