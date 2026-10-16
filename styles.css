@@ -209,10 +209,12 @@
   /* Spacing hierarchy, fluid with viewport height so short phones tighten
      instead of scrolling. Between sections is always clearly larger than
      anything inside a section, so the page reads as two groups.
-       page:    nav → content, content → footer   (~19px at 390×664)
-       section: CLAD group → video group           (~25px at 390×664)
+       page:    nav → content, content → footer   (~13px at 390×664, 23 on a Pro Max)
+       section: CLAD group → video group           (~25px at 390×664, 36 on a Pro Max)
+     The section gap does the grouping, so it gets priority; page margins
+     give way first on short screens to keep the video large.
        inside a section: label → block 8, block → its button 12 */
-  --space-page: clamp(12px, calc(3.2dvh - 2px), 28px);
+  --space-page: clamp(12px, calc(4dvh - 14px), 28px);
   --space-section: clamp(14px, calc(4.6dvh - 6px), 36px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
@@ -402,7 +404,7 @@ body {
   background: var(--clad-ground);
   border: 1px solid var(--border);       /* only adaptive property: defines the edge on #0A0A0A */
   border-radius: 16px;
-  padding: clamp(18px, 3dvh, 24px) 20px; /* vertical inset breathes with height */
+  padding: clamp(16px, calc(3.2dvh - 3px), 24px) 20px; /* vertical inset breathes with height */
   container-type: inline-size; /* the headline sizes itself to this box */
   text-align: center;          /* one centred axis, like the labels and video title */
 }
