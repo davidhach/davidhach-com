@@ -348,7 +348,7 @@ body {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .banner-clad {
@@ -426,7 +426,10 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  /* Proximity: a section label must sit closer to its own block (6px) than
+     to whatever ends the section above (gap + 6px). */
+  margin-top: 6px;
 }
 
 .eyebrow {
