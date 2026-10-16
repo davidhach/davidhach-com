@@ -1,7 +1,6 @@
 /* David Hach — link-in-bio
  * - Theme toggle (light/dark) with system preference + localStorage persistence.
- * - Latest YouTube video fetch via /api/latest-video (Vercel serverless).
- * - Newsletter form: progressive enhancement (set KIT_FORM_ACTION when ready).
+ * - Latest YouTube video via /api/latest-video (Vercel serverless).
  */
 (() => {
   "use strict";
@@ -46,168 +45,73 @@
 
   /* ────────────────────────────────────────────────────────
    * Latest YouTube video
+   * The API is the source of truth. The markup carries a fallback video
+   * (href, title, data-video-id) used only if the API can't be reached, so
+   * the frame never stays empty.
    * ──────────────────────────────────────────────────────── */
-  const card = document.getElementById("latest-video");
+  const link = document.getElementById("latest-video");
+  if (!link) return;
 
-  const formatRelative = (iso) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "";
-    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
-    const days = Math.floor(diff / 86400);
-    const ago = (n, unit) => n + " " + unit + (n === 1 ? "" : "s") + " ago";
-    if (days <= 0) return "Today";
-    if (days === 1) return "Yesterday";
-    if (days < 7) return ago(days, "day");
-    if (days < 30) return ago(Math.floor(days / 7), "week");
-    if (days < 365) return ago(Math.floor(days / 30), "month");
-    return ago(Math.floor(days / 365), "year");
+  const frame = link.querySelector("[data-thumb]");
+  const titleEl = link.querySelector("[data-title]");
+
+  const thumbUrl = (id, size) =>
+    "/api/yt-thumb?id=" + encodeURIComponent(id) + "&size=" + size;
+
+  // Try each source in turn; reveal the image only once it has decoded.
+  const showThumb = (sources) => {
+    if (!frame || !sources.length) return;
+    const img = new Image();
+    img.alt = "";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    let i = 0;
+    img.onload = () => {
+      const prev = frame.querySelector("img");
+      if (prev) prev.remove();
+      frame.insertBefore(img, frame.firstChild);
+      // Force a style flush so the opacity transition runs. Not rAF: hidden
+      // tabs and some in-app browsers stall it, which would leave the
+      // thumbnail invisible.
+      void img.offsetWidth;
+      img.classList.add("is-loaded");
+      link.dataset.state = "ready";
+    };
+    img.onerror = () => {
+      i += 1;
+      if (i < sources.length) img.src = sources[i];
+      else link.dataset.state = "fallback";
+    };
+    img.src = sources[0];
   };
 
-  const renderVideo = (data) => {
-    if (!card || !data || !data.videoId) return;
-    const titleEl = card.querySelector("[data-title]");
-    const thumbEl = card.querySelector("[data-thumb]");
-    const metaEl = card.querySelector("[data-meta]");
-
-    card.href = data.url;
-    if (titleEl) titleEl.textContent = data.title;
-    if (metaEl) {
-      const rel = formatRelative(data.publishedAt);
-      metaEl.textContent = (rel ? rel + " · " : "") + "@david_hach";
-    }
-    if (thumbEl) {
-      const img = new Image();
-      img.alt = "";
-      img.loading = "eager";
-      img.decoding = "async";
-      img.width = 144;
-      img.height = 81;
-      img.referrerPolicy = "no-referrer";
-      img.onload = () => {
-        thumbEl.innerHTML = "";
-        thumbEl.appendChild(img);
-      };
-      img.onerror = () => {
-        // Try the alternate thumbnail size; otherwise keep placeholder
-        if (data.thumbnailHigh && img.src !== data.thumbnailHigh) {
-          img.src = data.thumbnailHigh;
-        }
-      };
-      img.src = data.thumbnail;
-    }
-    card.dataset.state = "ready";
+  const useFallback = () => {
+    const id = link.dataset.videoId;
+    if (id) showThumb([thumbUrl(id, "max"), thumbUrl(id, "hq")]);
+    else link.dataset.state = "fallback";
   };
 
   const loadLatestVideo = async () => {
-    if (!card) return;
     try {
-      const res = await fetch("/api/latest-video", {
-        headers: { Accept: "application/json" }
-      });
+      const res = await fetch("/api/latest-video", { headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      if (data && data.videoId) {
-        renderVideo(data);
-      } else {
-        card.dataset.state = "fallback";
-      }
-    } catch (e) {
-      // Local file:// preview, dev without serverless, or transient failure.
-      // Keep the placeholder; card already links to the channel.
-      card.dataset.state = "fallback";
+      if (!data || !data.videoId) throw new Error("no video");
+
+      link.href = data.url;
+      link.dataset.videoId = data.videoId;
+      if (titleEl && data.title) titleEl.textContent = data.title;
+      showThumb([data.thumbnail, data.thumbnailFallback].filter(Boolean));
+    } catch (_) {
+      // Dev without serverless, or a transient failure: show the fallback video.
+      useFallback();
     }
   };
 
   // Only fetch when served over http(s); skip on file:// to avoid noisy errors.
   if (location.protocol === "http:" || location.protocol === "https:") {
     loadLatestVideo();
-  } else if (card) {
-    card.dataset.state = "fallback";
+  } else {
+    useFallback();
   }
-
-  /* ────────────────────────────────────────────────────────
-   * Newsletter form
-   * Submits to /api/subscribe — our server-side Kit proxy. The browser never
-   * contacts Kit directly, so no third-party request leaks the visitor's IP.
-   * Requires explicit consent (GDPR Art. 6(1)(a)).
-   * ──────────────────────────────────────────────────────── */
-  const form = document.getElementById("newsletter");
-  if (!form) return;
-
-  const input = form.querySelector(".lab-input");
-  const submit = form.querySelector(".lab-submit");
-  const consent = form.querySelector(".lab-consent input[type=checkbox]");
-  const status = document.querySelector(".lab-status");
-
-  const setStatus = (msg, state) => {
-    if (!status) return;
-    status.textContent = msg || "";
-    status.hidden = !msg;
-    if (state) status.dataset.state = state;
-    else delete status.dataset.state;
-  };
-
-  const isValidEmail = (v) =>
-    typeof v === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const email = ((input && input.value) || "").trim();
-    const hasConsent = !!(consent && consent.checked);
-
-    if (!isValidEmail(email)) {
-      setStatus("Please enter a valid email.", "error");
-      input && input.focus();
-      return;
-    }
-    if (!hasConsent) {
-      setStatus("Please confirm consent to continue.", "error");
-      const wrap = consent && consent.closest(".lab-consent");
-      if (wrap) {
-        wrap.classList.remove("is-missing");
-        // Force reflow so the animation re-triggers on repeat clicks
-        void wrap.offsetWidth;
-        wrap.classList.add("is-missing");
-      }
-      consent && consent.focus();
-      return;
-    }
-    // Clear any previous "missing consent" highlight as soon as it's checked
-    const wrap = consent && consent.closest(".lab-consent");
-    if (wrap) wrap.classList.remove("is-missing");
-
-    if (submit) submit.disabled = true;
-    setStatus("Subscribing…");
-
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, consent: true })
-      });
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok) {
-        if (data.status === "already_subscribed") {
-          setStatus("You're already on the list.", "success");
-        } else {
-          setStatus("Thanks — check your inbox to confirm.", "success");
-        }
-        form.reset();
-      } else if (data.error === "consent_required") {
-        setStatus("Please confirm consent to continue.", "error");
-      } else if (data.error === "kit_api_key_missing") {
-        setStatus("Newsletter not yet configured.", "error");
-      } else if (data.error === "invalid_email") {
-        setStatus("Please enter a valid email.", "error");
-      } else {
-        setStatus("Something went wrong. Try again in a moment.", "error");
-      }
-    } catch (err) {
-      setStatus("Something went wrong. Try again in a moment.", "error");
-    } finally {
-      if (submit) submit.disabled = false;
-    }
-  });
 })();

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
 
   <title>David Hach — Designer & Builder</title>
-  <meta name="description" content="David Hach. Designer building products with AI. Latest video, newsletter, and links." />
+  <meta name="description" content="David Hach. Designer building products with AI. Latest video, CLAD, and links." />
   <link rel="canonical" href="https://davidhach.com/" />
 
   <!-- Open Graph -->
@@ -31,6 +31,8 @@
   <link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-sans-latin-600-normal.woff2" crossorigin />
   <link rel="preload" as="font" type="font/woff2" href="/fonts/instrument-sans-latin-700-normal.woff2" crossorigin />
 
+  <!-- Start the latest-video lookup in parallel with CSS, not after script.js runs -->
+  <link rel="preload" href="/api/latest-video" as="fetch" crossorigin />
   <link rel="stylesheet" href="./styles.css" />
 
   <!-- Theme hydration: runs before paint to avoid FOUC -->
@@ -52,19 +54,15 @@
 <body>
   <a href="#main" class="skip-nav">Skip to content</a>
 
+  <!-- One screen, no scroll: topbar and footer are fixed-height; the content
+       group between them is centred, and the video frame is the only element
+       that flexes — it shrinks on short viewports instead of the page scrolling. -->
   <main id="main" class="page">
     <div class="stack">
 
-      <!-- Top utility: header tagline + theme toggle -->
       <header class="topbar">
         <p class="tagline">Building epic things with epic people.</p>
-        <button
-          type="button"
-          id="theme-toggle"
-          class="theme-toggle"
-          aria-label="Toggle color theme"
-          title="Toggle theme"
-        >
+        <button type="button" id="theme-toggle" class="icon-btn theme-toggle" aria-label="Toggle color theme" title="Toggle theme">
           <!-- Sun (visible in dark mode → click to go light) -->
           <svg class="icon icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4" />
@@ -77,103 +75,57 @@
         </button>
       </header>
 
-      <!-- CLAD banner — brand-fixed CLAD colors, identical in both themes -->
-      <a class="banner-clad" href="https://letsclad.com" target="_blank" rel="noopener">
-        <h2 class="clad-headline">Join the next generation of&nbsp;<span class="clad-keep">impact creators<span class="clad-dot" aria-hidden="true"></span></span></h2>
-        <p class="clad-body">CLAD is our creator platform turning content creation into scalable income &amp; lasting impact.</p>
-        <span class="clad-cta">Explore CLAD <span aria-hidden="true">→</span></span>
-      </a>
+      <div class="content">
 
-      <!-- Latest Video -->
-      <!-- The title + meta below are the static fallback used during the
-           split second before /api/latest-video resolves and the script
-           swaps in the live data. Update if a *much* newer video lands. -->
-      <a class="card card--video" id="latest-video" href="https://www.youtube.com/watch?v=j_cIifiHHw8" target="_blank" rel="noopener" data-state="loading">
-        <h2 class="card-heading">Latest Video</h2>
-        <p class="card-meta" data-meta>@david_hach</p>
-        <div class="card-row">
-          <div class="thumb" data-thumb aria-hidden="true">
-            <!-- Placeholder; replaced by real YouTube thumbnail when API resolves -->
-            <svg viewBox="0 0 160 90" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <linearGradient id="thumb-grad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stop-color="var(--thumb-stop-1, #1F1F1F)"/>
-                  <stop offset="100%" stop-color="var(--thumb-stop-2, #0A0A0A)"/>
-                </linearGradient>
-              </defs>
-              <rect width="160" height="90" fill="url(#thumb-grad)"/>
-              <circle cx="80" cy="45" r="18" fill="var(--text-2, #A8A29E)"/>
-              <path d="M74 36 L92 45 L74 54 Z" fill="var(--bg, #0A0A0A)"/>
-            </svg>
-          </div>
-          <p class="card-title" data-title>POV: You’re building a startup from Lisbon</p>
-        </div>
-        <span class="card-arrow" aria-hidden="true">↗</span>
-      </a>
-
-      <!-- Primary CTA -->
-      <a class="btn-primary" href="https://youtube.com/@david_hach?sub_confirmation=1" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/>
-        </svg>
-        <span>Subscribe @david_hach</span>
-      </a>
-
-      <!-- Newsletter -->
-      <section class="card card--lab" aria-labelledby="lab-title">
-        <p id="lab-title" class="lab-title">Tap into my brain</p>
-        <p class="lab-sub">Value only, promised.</p>
-        <form id="newsletter" novalidate>
-          <label class="visually-hidden" for="email">Email address</label>
-          <div class="lab-form">
-            <input
-              id="email"
-              class="lab-input"
-              name="email"
-              type="email"
-              inputmode="email"
-              autocomplete="email"
-              placeholder="your@email.com"
-              required
-            />
-            <button class="lab-submit" type="submit" aria-label="Subscribe">
-              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-                <path d="M3 10h13M11 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-          <label class="lab-consent">
-            <input type="checkbox" name="consent" required />
-            <span>
-              I agree to receive the newsletter at the email I provide. I can unsubscribe anytime — see the
-              <a href="/privacy">privacy notice</a>.
-            </span>
-          </label>
-          <p class="lab-status" data-status hidden></p>
-        </form>
-      </section>
-
-      <!-- Socials -->
-      <nav class="socials" aria-label="Social profiles">
-        <a class="social" href="https://www.youtube.com/@david_hach" target="_blank" rel="noopener" aria-label="YouTube">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/>
-          </svg>
+        <!-- CLAD banner — brand-fixed CLAD colors, identical in both themes.
+             Copy mirrors the letsclad.com hero. -->
+        <a class="banner-clad" href="https://letsclad.com" target="_blank" rel="noopener">
+          <h2 class="clad-headline">Turn what you offer into a meaningful business that pays. <span class="clad-keep">In 90 days<span class="clad-dot" aria-hidden="true"></span></span></h2>
+          <p class="clad-body">A clear offer structure, a strong brand and content that brings the right people. One step at a time, guided by a proven system.</p>
+          <span class="clad-cta">Explore CLAD <span aria-hidden="true">→</span></span>
         </a>
-        <a class="social" href="https://www.instagram.com/david_hach/" target="_blank" rel="noopener" aria-label="Instagram">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069ZM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z"/>
-          </svg>
+
+        <!-- Latest video. /api/latest-video is the source of truth; the href,
+             title and data-video-id below are only the no-JS / API-down
+             fallback. Update them if a much newer video lands. -->
+        <section class="video" aria-labelledby="video-label">
+          <h2 id="video-label" class="eyebrow">Watch my latest video</h2>
+          <a class="video-link" id="latest-video" href="https://www.youtube.com/watch?v=j_cIifiHHw8" target="_blank" rel="noopener" data-state="loading" data-video-id="j_cIifiHHw8">
+            <div class="video-slot">
+              <div class="video-frame" data-thumb>
+                <noscript><img src="/api/yt-thumb?id=j_cIifiHHw8&amp;size=max" alt="" class="is-loaded" /></noscript>
+                <span class="video-play" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5.5v13l11-6.5z" /></svg>
+                </span>
+              </div>
+            </div>
+            <p class="video-title" data-title>POV: You’re building a startup from Lisbon</p>
+          </a>
+        </section>
+
+        <a class="btn-primary" href="https://youtube.com/@david_hach?sub_confirmation=1" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/></svg>
+          <span>Subscribe @david_hach</span>
         </a>
-      </nav>
+
+      </div>
 
       <footer class="footer">
         <p class="footer-legal">
+          <span>© David Hach</span>
+          <span aria-hidden="true">·</span>
           <a href="/imprint">Imprint</a>
           <span aria-hidden="true">·</span>
           <a href="/privacy">Privacy</a>
         </p>
-        <p>David Hach &nbsp;|&nbsp; All Rights Reserved</p>
+        <nav class="footer-social" aria-label="Social profiles">
+          <a class="icon-btn" href="https://www.youtube.com/@david_hach" target="_blank" rel="noopener" aria-label="YouTube">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.5 6.2a3.02 3.02 0 0 0-2.12-2.13C19.56 3.6 12 3.6 12 3.6s-7.56 0-9.38.47A3.02 3.02 0 0 0 .5 6.2C0 8.04 0 12 0 12s0 3.96.5 5.8a3.02 3.02 0 0 0 2.12 2.13C4.44 20.4 12 20.4 12 20.4s7.56 0 9.38-.47a3.02 3.02 0 0 0 2.12-2.13C24 15.96 24 12 24 12s0-3.96-.5-5.8ZM9.6 15.6V8.4l6.4 3.6-6.4 3.6Z"/></svg>
+          </a>
+          <a class="icon-btn" href="https://www.instagram.com/david_hach/" target="_blank" rel="noopener" aria-label="Instagram">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069ZM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z"/></svg>
+          </a>
+        </nav>
       </footer>
     </div>
   </main>

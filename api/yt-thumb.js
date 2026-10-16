@@ -9,9 +9,27 @@
 const SIZE_MAP = {
   mq: "mqdefault.jpg",
   hq: "hqdefault.jpg",
-  max: "maxresdefault.jpg",
-  sd: "sddefault.jpg"
+  sd: "sddefault.jpg",
+  max: "maxresdefault.jpg"
 };
+
+// Sharpest first. maxres/sd don't exist for every upload, and maxres in
+// particular is often missing for a video's first minutes — exactly when it
+// is the newest one on the page.
+const FALLBACKS = {
+  max: ["max", "sd", "hq", "mq"],
+  sd: ["sd", "hq", "mq"],
+  hq: ["hq", "mq"],
+  mq: ["mq"]
+};
+
+// max-age is for the visitor's browser; s-maxage only governs Vercel's edge.
+// Without it browsers re-download the (250KB maxres) thumbnail on every visit.
+// A given id+size never changes, so a day in the browser is safe.
+const LONG_CACHE = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800, immutable";
+// A fallback must not be cached as if it were the requested size, or the
+// blurry stand-in sticks around for a day after maxres appears.
+const SHORT_CACHE = "public, max-age=600, s-maxage=600, stale-while-revalidate=3600";
 
 export default async function handler(req, res) {
   const { id, size } = req.query || {};
@@ -22,36 +40,23 @@ export default async function handler(req, res) {
     res.status(400).end("invalid id");
     return;
   }
-  const file = SIZE_MAP[typeof size === "string" ? size : "mq"] || SIZE_MAP.mq;
-  const upstream = `https://i.ytimg.com/vi/${videoId}/${file}`;
+  const requested = typeof size === "string" && SIZE_MAP[size] ? size : "mq";
 
   try {
-    const r = await fetch(upstream, {
-      headers: { "User-Agent": "davidhach.com-thumb-proxy/1.0" }
-    });
-    if (!r.ok) {
-      // Try mqdefault as a fallback if maxres is missing
-      if (file !== "mqdefault.jpg") {
-        const fb = await fetch(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`, {
-          headers: { "User-Agent": "davidhach.com-thumb-proxy/1.0" }
-        });
-        if (fb.ok) {
-          const buf = Buffer.from(await fb.arrayBuffer());
-          res.setHeader("Content-Type", "image/jpeg");
-          res.setHeader("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=604800, immutable");
-          res.status(200).end(buf);
-          return;
-        }
-      }
-      res.setHeader("Cache-Control", "no-store");
-      res.status(r.status).end("upstream " + r.status);
+    for (const candidate of FALLBACKS[requested]) {
+      const r = await fetch(`https://i.ytimg.com/vi/${videoId}/${SIZE_MAP[candidate]}`, {
+        headers: { "User-Agent": "davidhach.com-thumb-proxy/1.0" }
+      });
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      res.setHeader("Content-Type", r.headers.get("content-type") || "image/jpeg");
+      res.setHeader("Cache-Control", candidate === requested ? LONG_CACHE : SHORT_CACHE);
+      res.setHeader("X-Thumb-Size", candidate);
+      res.status(200).end(buf);
       return;
     }
-    const buf = Buffer.from(await r.arrayBuffer());
-    res.setHeader("Content-Type", r.headers.get("content-type") || "image/jpeg");
-    // 1 day at the edge, 7 days stale-while-revalidate
-    res.setHeader("Cache-Control", "public, s-maxage=86400, stale-while-revalidate=604800, immutable");
-    res.status(200).end(buf);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(404).end("no thumbnail");
   } catch (e) {
     res.setHeader("Cache-Control", "no-store");
     res.status(502).end("proxy error");

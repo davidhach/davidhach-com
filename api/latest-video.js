@@ -16,7 +16,7 @@
 // scrape-only design. Both failed closed and pinned the card to a stale
 // placeholder. Hence RSS first, with the API as the durable escape hatch.
 //
-// Edge-cached so we don't hammer upstream on every page load.
+// Edge-cached for 10 minutes so we don't hammer upstream on every page load.
 
 const HANDLE = "@david_hach";
 const CHANNEL_ID = "UCekAN8pgYfwFeujU5dRr4ww"; // @david_hach
@@ -47,8 +47,16 @@ const decodeEntities = (s) =>
 // dependency. We read each <entry> in document order — YouTube returns them
 // newest first — and take the first whose alternate link is not a Short.
 function pickFromRss(xml) {
-  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
-  for (const entry of entries) {
+  const entries = (xml.match(/<entry>[\s\S]*?<\/entry>/g) || [])
+    .map((entry) => {
+      const published = (entry.match(/<published>([^<]+)<\/published>/) || [])[1];
+      return { entry, time: published ? Date.parse(published) : 0, published };
+    })
+    // YouTube lists newest first today, but don't depend on it: sort by the
+    // publish timestamp so "latest" is always literally the latest.
+    .sort((a, b) => b.time - a.time);
+
+  for (const { entry, published } of entries) {
     const link = (entry.match(/<link[^>]+rel="alternate"[^>]+href="([^"]+)"/) || [])[1] || "";
     if (link.includes("/shorts/")) continue; // Short — skip
 
@@ -56,7 +64,6 @@ function pickFromRss(xml) {
     const rawTitle = (entry.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
     if (!videoId || !rawTitle) continue;
 
-    const published = (entry.match(/<published>([^<]+)<\/published>/) || [])[1];
     return {
       videoId,
       title: decodeEntities(rawTitle).trim(),
@@ -68,7 +75,8 @@ function pickFromRss(xml) {
 
 async function tryRssFeed() {
   const r = await fetch(RSS_URL, {
-    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" }
+    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+    cache: "no-store"
   });
   if (!r.ok) return null;
   const xml = await r.text();
@@ -282,9 +290,10 @@ export default async function handler(req, res) {
       author: "David Hach",
       publishedAt,
       // Proxied through our domain so the visitor's browser never calls
-      // Google / YouTube CDNs (GDPR-clean).
-      thumbnail: `/api/yt-thumb?id=${encodeURIComponent(video.videoId)}&size=mq`,
-      thumbnailHigh: `/api/yt-thumb?id=${encodeURIComponent(video.videoId)}&size=max`
+      // Google / YouTube CDNs (GDPR-clean). The frame is full column width,
+      // so ask for maxres (1280w); hq is the client's fallback.
+      thumbnail: `/api/yt-thumb?id=${encodeURIComponent(video.videoId)}&size=max`,
+      thumbnailFallback: `/api/yt-thumb?id=${encodeURIComponent(video.videoId)}&size=hq`
     };
 
     if (debug) {
@@ -292,9 +301,11 @@ export default async function handler(req, res) {
       payload._source = winner;
     }
 
+    // 10 min at the edge: a new upload shows up within minutes, while the
+    // feed is still fetched at most a few times an hour.
     res.setHeader(
       "Cache-Control",
-      "public, s-maxage=3600, stale-while-revalidate=86400"
+      "public, s-maxage=600, stale-while-revalidate=3600"
     );
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200).json(payload);

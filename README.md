@@ -16,7 +16,7 @@ serverless function that pulls the latest YouTube video. Zero build step.
 code/
 ├── index.html             # The page
 ├── styles.css             # Tokens + layout (dark/light scoped via [data-theme])
-├── script.js              # Theme toggle + latest-video fetch + newsletter
+├── script.js              # Theme toggle + latest-video fetch
 ├── favicon.svg            # DH monogram (also inlined in <head>)
 ├── robots.txt
 ├── sitemap.xml
@@ -58,13 +58,12 @@ That's it. Vercel auto-detects `api/latest-video.js` as a serverless function an
 - Hydration runs in `<head>` before paint — no flash of wrong theme.
 - Brand-correct: the page is monochrome in both modes. `--accent` is off-white in dark mode and near-black in light mode — i.e. the accent *is* the primary text color either way, so hierarchy is structural, never chromatic (per `brand-identity.md`). The Subscribe CTA is a filled block of that accent rather than a hue.
 
-### Newsletter form
-- When `KIT_FORM_ACTION` is `null` (default), the form captures emails to `localStorage` and shows a thanks state — useful while you're still hooking up Kit.
-- When you're ready, open `script.js` and set:
-  ```js
-  const KIT_FORM_ACTION = "https://app.kit.com/forms/XXXXXXX/subscriptions";
-  ```
-  The form will then POST directly to Kit (no proxy, no extra config needed).
+### One screen, no scroll
+- The page is sized to the viewport (`100dvh`): topbar and footer are fixed-height, the content between them is centred, and the latest-video frame is the only element that flexes — it shrinks (staying 16:9, never cropped) on short screens instead of the page scrolling.
+- Verified scroll-free from 360×640 up, including iPhone Safari's visible height (~390×664) and Instagram's in-app browser (~393×740). Below 500px tall the page falls back to normal scrolling rather than crushing the thumbnail.
+
+### Newsletter
+- The signup box was removed from the page. `api/subscribe.js` and the Kit section of `privacy.html` stay: Kit still holds the data of anyone who subscribed earlier, so the notice remains accurate for them.
 
 ## Local preview
 

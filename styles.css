@@ -119,10 +119,8 @@
   --accent-hover: #E7E5E4;
   --accent-muted: rgba(245, 245, 244, 0.08);
   --accent-on: #0A0A0A;
+  --frame-edge: rgba(255, 255, 255, 0.08);
 
-  /* Mode-specific values */
-  --thumb-stop-1: #1F1F1F;
-  --thumb-stop-2: #0A0A0A;
 
   /* Primary CTA: filled accent in dark mode */
   --cta-bg: var(--accent);
@@ -130,9 +128,6 @@
   --cta-fg: var(--accent-on);
   --cta-focus-ring: var(--text);
 
-  /* Submit hover: turns accent in dark mode */
-  --submit-hover-bg: var(--accent);
-  --submit-hover-fg: var(--accent-on);
 }
 
 [data-theme="light"] {
@@ -150,9 +145,8 @@
   --accent-hover: #1F1F1F;
   --accent-muted: rgba(10, 10, 10, 0.06);
   --accent-on: #FAFAF9;
+  --frame-edge: rgba(10, 10, 10, 0.08);
 
-  --thumb-stop-1: #EDEDEA;
-  --thumb-stop-2: #F4F4F2;
 
   /* Primary CTA: filled near-black in light mode (no hue) */
   --cta-bg: #0A0A0A;
@@ -160,9 +154,6 @@
   --cta-fg: #FAFAF9;
   --cta-focus-ring: #0A0A0A;
 
-  /* Submit hover: stays neutral in light mode */
-  --submit-hover-bg: #0A0A0A;
-  --submit-hover-fg: #FAFAF9;
 }
 
 :root {
@@ -175,6 +166,12 @@
   --r-pill: 999px;
 
   --container: 440px;
+  --gutter: 16px;
+  /* The column's real width — drives the video frame's natural 16:9 height */
+  --col: min(100vw - 2 * var(--gutter), var(--container));
+  /* Vertical rhythm scales with viewport height: 8px on an SE, 10px at the
+     standard iPhone Safari height (~664), 14px on a Pro Max */
+  --gap: clamp(8px, 1.5dvh, 16px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* CLAD banner — brand-fixed, identical in both themes */
@@ -195,7 +192,6 @@ html {
 }
 img, svg { display: block; max-width: 100%; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-input { font: inherit; color: inherit; }
 a { color: inherit; text-decoration: none; }
 
 body {
@@ -239,39 +235,81 @@ body {
   white-space: nowrap; border: 0;
 }
 
-/* ── Page shell ────────────────────────────────────────── */
+/* ── Page shell: one screen, no scroll ─────────────────────
+   Topbar and footer are fixed-height. Everything between them sits in
+   .content, centred vertically. The video frame is the only element that
+   flexes: on short viewports it shrinks (keeping 16:9) instead of the page
+   scrolling; on tall ones it caps at full column width and the slack is
+   shared above and below the content group. */
 .page {
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
-  align-items: stretch;
   justify-content: center;
-  padding: 18px 18px 22px;
-}
-
-@media (min-width: 720px) {
-  .page { align-items: center; padding: 48px 24px; }
+  padding:
+    max(12px, env(safe-area-inset-top))
+    var(--gutter)
+    max(8px, env(safe-area-inset-bottom));
 }
 
 .stack {
   width: 100%;
   max-width: var(--container);
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap);
 }
 
-@media (min-width: 720px) {
-  .stack { gap: 12px; }
+.content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--gap);
 }
 
+/* Desktop: a phone-width column stretched to a 900px-tall window reads as
+   empty. Collapse to natural height and centre the whole column instead. */
+@media (min-width: 720px) and (min-height: 760px) {
+  .page { align-items: center; }
+  .stack { height: auto; gap: 16px; }
+  .content { gap: 16px; }
+}
+
+/* Below this the frame would get smaller than a useful thumbnail, so let the
+   page fall back to normal scrolling rather than crush it. */
+@media (max-height: 500px) {
+  .page { height: auto; min-height: 100dvh; }
+  .stack { height: auto; }
+}
+
+/* ── Shared icon button (theme toggle, socials) ───────── */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  transition: color 160ms var(--ease), background-color 160ms var(--ease);
+}
+.icon-btn:hover { color: var(--text); background: var(--surface); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Top bar (tagline + theme toggle) ──────────────────── */
 .topbar {
+  flex: none;
+  height: 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin: 0 4px 2px;
+  margin-right: -8px; /* optically align the toggle's glyph with the column edge */
 }
 
 .tagline {
@@ -280,40 +318,12 @@ body {
   font-size: 14px;
   font-weight: 500;
   letter-spacing: -0.005em;
-  color: var(--text-2);
   line-height: 1.3;
-  /* Truncate gracefully on very narrow viewports */
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 1 auto;
   min-width: 0;
-}
-
-@media (min-width: 380px) {
-  .tagline { font-size: 14px; }
-}
-
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-pill);
-  color: var(--text-2);
-  background: transparent;
-  border: 1px solid transparent;
-  transition: color 160ms var(--ease), background 160ms var(--ease), border-color 160ms var(--ease);
-}
-.theme-toggle:hover {
-  color: var(--text);
-  background: var(--surface);
-  border-color: var(--border);
-}
-.theme-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .theme-toggle .icon { display: none; }
@@ -322,28 +332,27 @@ body {
 
 /* ── CLAD banner (brand-fixed; does not respond to theme) ─ */
 .banner-clad {
+  flex: none;
   display: block;
   background: var(--clad-ground);
   border: 1px solid var(--border);       /* only adaptive property: defines the edge on #0A0A0A */
   border-radius: 16px;
-  padding: 28px 24px;
+  padding: clamp(16px, 2.5dvh, 24px) 20px;
 }
 /* On the light ground the card already separates itself; a light hairline
    would ring the dark green with a halo, so drop it. */
 [data-theme="light"] .banner-clad { border-color: transparent; }
-@media (min-width: 720px) {
-  .banner-clad { padding: 32px 28px; }
-}
 .banner-clad:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .clad-headline {
-  margin: 0 0 10px;
+  margin: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(26px, 7vw, 30px);
-  line-height: 1.05;
-  letter-spacing: -0.025em;
+  font-size: clamp(20px, calc(2.6dvh + 4px), 24px);
+  line-height: 1.08;
+  letter-spacing: -0.022em;
   color: var(--clad-paper);
+  text-wrap: balance;
 }
 .clad-keep { white-space: nowrap; }
 .clad-dot {
@@ -354,12 +363,12 @@ body {
   background: var(--clad-lime);
 }
 .clad-body {
-  margin: 0 0 18px;
+  margin: 8px 0 clamp(12px, 2dvh, 18px);
   font-family: var(--font-body);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: clamp(13px, calc(1.2dvh + 6px), 15px);
+  line-height: 1.45;
   color: rgba(250, 250, 247, 0.72);      /* Paper at opacity — CLAD's "no greys" rule */
-  max-width: 34ch;
+  text-wrap: pretty;
 }
 .clad-cta {
   display: inline-flex;
@@ -368,322 +377,156 @@ body {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 15px;
+  line-height: 1;
   color: var(--clad-ink);
   background: var(--clad-lime);
   border: 1.5px solid var(--clad-ink);
   border-radius: 8px;
-  padding: 12px 20px;
+  padding: 11px 18px;
   box-shadow: 4px 4px 0 0 var(--clad-ink);
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 .banner-clad:hover .clad-cta { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 var(--clad-ink); }
 .banner-clad:active .clad-cta { transform: translate(2px, 2px); box-shadow: 2px 2px 0 0 var(--clad-ink); }
 
-/* ── Card primitives ───────────────────────────────────── */
-.card {
-  position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 18px;
-  transition:
-    background-color 200ms var(--ease),
-    border-color 200ms var(--ease),
-    transform 200ms var(--ease);
-}
-@media (min-width: 720px) {
-  .card { padding: 20px; }
+/* ── Latest video ──────────────────────────────────────── */
+.video {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-/* ── Latest Video card ─────────────────────────────────── */
-.card--video {
-  display: block;
-  color: var(--text);
-}
-
-.card--video:hover {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
-}
-
-.card-heading {
-  margin: 0 0 2px;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  color: var(--text);
-}
-@media (min-width: 720px) {
-  .card-heading { font-size: 24px; margin-bottom: 4px; }
-}
-
-.card-meta {
-  margin: 0 0 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-3);
-  letter-spacing: 0.01em;
-}
-@media (min-width: 720px) {
-  .card-meta { font-size: 13px; margin-bottom: 14px; }
-}
-
-.card-row {
-  display: grid;
-  grid-template-columns: clamp(88px, 34%, 128px) minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-}
-
-.thumb {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-}
-.thumb svg, .thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.card-title {
+.eyebrow {
+  flex: none;
   margin: 0;
+  padding: 0 2px;
   font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--text);
-  letter-spacing: -0.005em;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-@media (min-width: 720px) {
-  .card-title { font-size: 15px; -webkit-line-clamp: 4; }
-}
-
-.card-arrow {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  font-size: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center; /* the frame can narrow on short screens; keep the block's axis */
   color: var(--text-3);
-  transition: color 200ms var(--ease), transform 200ms var(--ease);
-}
-.card--video:hover .card-arrow {
-  color: var(--text);
-  transform: translate(2px, -2px);
 }
 
-/* Loading shimmer (thumb) */
-.card--video[data-state="loading"] .thumb { position: relative; overflow: hidden; }
-.card--video[data-state="loading"] .thumb::after {
+.video-link {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  border-radius: 14px;
+}
+.video-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* The flexing element. Its natural height is the column's 16:9; it may shrink
+   to 96px. As a size container it lets the frame pick the largest 16:9 box
+   that fits — full width when there's room, narrower and centred when not.
+   Never cropped, never letterboxed. */
+.video-slot {
+  flex: 0 1 auto;
+  height: calc(var(--col) * 9 / 16);
+  min-height: 96px;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+.video-frame {
+  position: relative;
+  width: 100%;
+  width: min(100cqw, 100cqh * 16 / 9);
+  aspect-ratio: 16 / 9;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+}
+/* Hairline drawn on top of the image so it reads on any thumbnail */
+.video-frame::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--accent-muted) 50%,
-    transparent 100%
-  );
-  animation: shimmer 1.6s linear infinite;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--frame-edge);
   pointer-events: none;
+}
+.video-frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover; /* hq/sd fallbacks are 4:3 letterboxed — cover crops the bars exactly */
+  opacity: 0;
+  transform: scale(1);
+  transition: opacity 280ms var(--ease), transform 480ms var(--ease);
+}
+.video-frame img.is-loaded { opacity: 1; }
+.video-link:hover .video-frame img { transform: scale(1.025); }
+
+/* Loading shimmer until the thumbnail arrives */
+.video-link[data-state="loading"] .video-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-muted) 50%, transparent 100%);
+  animation: shimmer 1.4s linear infinite;
 }
 @keyframes shimmer {
   from { transform: translateX(-100%); }
   to   { transform: translateX(100%); }
 }
 
-/* ── Newsletter ("Tap into my brain") ──────────────────── */
-.card--lab {
-  background: var(--surface);
-  padding: 18px;
-}
-@media (min-width: 720px) {
-  .card--lab { padding: 24px; }
-}
-
-.lab-title {
-  margin: 0 0 2px;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  color: var(--text);
-}
-@media (min-width: 720px) {
-  .lab-title { font-size: 24px; margin-bottom: 4px; }
-}
-
-.lab-sub {
-  margin: 0 0 12px;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--text-2);
-  max-width: 36ch;
-}
-@media (min-width: 720px) {
-  .lab-sub { font-size: 15px; margin-bottom: 18px; }
-}
-
-.lab-form {
+.video-play {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: stretch;
-  gap: 0;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 6px;
-  transition: border-color 160ms var(--ease);
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(250, 250, 247, 0.94);
+  color: #0F0F0E;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  transition: transform 200ms var(--ease);
 }
-.lab-form:focus-within { border-color: var(--border-strong); }
+.video-play svg { margin-left: 2px; } /* optical centre of a triangle */
+.video-link:hover .video-play { transform: scale(1.06); }
 
-.lab-input {
-  background: transparent;
-  border: 0;
-  outline: 0;
-  padding: 12px 14px;
+.video-title {
+  flex: none;
+  margin: 0;
+  padding: 0 8px;
+  font-family: var(--font-body);
   font-size: 15px;
-  color: var(--text);
-  min-width: 0;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  text-align: center;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.lab-input::placeholder { color: var(--text-3); }
-
-.lab-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-sm);
-  color: var(--text);
-  background: var(--surface-2);
-  transition: background 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
-}
-.lab-submit:hover { background: var(--submit-hover-bg); color: var(--submit-hover-fg); }
-.lab-submit:active { transform: scale(0.97); }
-.lab-submit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.lab-consent {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  margin: 10px 2px 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-2);
-  cursor: pointer;
-  user-select: none;
-}
-@media (min-width: 720px) {
-  .lab-consent { font-size: 12px; line-height: 1.5; margin-top: 12px; }
-}
-.lab-consent input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  margin: 2px 0 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 3px;
-  background: var(--bg);
-  cursor: pointer;
-  display: grid;
-  place-content: center;
-  flex-shrink: 0;
-  transition: border-color 160ms var(--ease), background-color 160ms var(--ease);
-}
-.lab-consent input[type="checkbox"]:hover { border-color: var(--text-2); }
-.lab-consent input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.lab-consent.is-missing input[type="checkbox"] {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-muted);
-  animation: nudge 320ms var(--ease);
-}
-@keyframes nudge {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-3px); }
-  40%, 80% { transform: translateX(3px); }
-}
-.lab-consent input[type="checkbox"]:checked {
-  background: var(--text);
-  border-color: var(--text);
-}
-.lab-consent input[type="checkbox"]:checked::after {
-  content: "";
-  width: 8px;
-  height: 8px;
-  background: var(--bg);
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-}
-.lab-consent a {
-  color: var(--text);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
-.lab-consent a:hover { color: var(--text-2); }
-
-.lab-status {
-  margin: 8px 2px 0;
-  font-size: 12px;
-  color: var(--text-2);
-  min-height: 0;
-}
-.lab-status[hidden] { display: none; }
-.lab-status[data-state="success"] { color: var(--text); font-weight: 500; }
-.lab-status[data-state="error"] { color: #DC2626; }
-[data-theme="dark"] .lab-status[data-state="error"] { color: #F87171; }
-
-/* ── Socials ───────────────────────────────────────────── */
-.socials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 4px 0 0;
-}
-
-.social {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--r-pill);
-  color: var(--text-2);
-  background: transparent;
-  transition: color 160ms var(--ease), background 160ms var(--ease);
-}
-.social:hover { color: var(--text); background: var(--surface); }
-.social:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Primary CTA ───────────────────────────────────────── */
 .btn-primary {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 13px 24px;
+  height: 48px;
+  padding: 0 24px;
   background: var(--cta-bg);
   color: var(--cta-fg);
   border-radius: var(--r-pill);
@@ -692,53 +535,47 @@ body {
   font-weight: 600;
   letter-spacing: -0.005em;
   transition: background 160ms var(--ease), transform 160ms var(--ease);
-  will-change: transform;
-}
-@media (min-width: 720px) {
-  .btn-primary { padding: 16px 24px; }
 }
 .btn-primary:hover { background: var(--cta-bg-hover); }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:focus-visible { outline: 2px solid var(--cta-focus-ring); outline-offset: 2px; }
-@media (max-width: 719px) {
-  .btn-primary { padding: 14px 24px; }
-}
 
-/* ── Footer ────────────────────────────────────────────── */
+/* ── Footer: legal left, socials right, one row ────────── */
 .footer {
-  text-align: center;
-  margin-top: 4px;
-  padding: 4px 0 0;
-}
-.footer p {
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--text-3);
-}
-@media (min-width: 720px) {
-  .footer { margin-top: 12px; padding: 8px 0; }
-  .footer p { font-size: 12px; }
-}
-/* On mobile, push the footer to the bottom of the viewport so content above
-   gets vertical breathing room instead of bunching at the top. */
-@media (max-width: 719px) {
-  .footer { margin-top: auto; padding-top: 12px; }
+  flex: none;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-right: -8px; /* align the last icon's glyph with the column edge */
 }
 .footer-legal {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 4px !important;
-}
-.footer-legal a {
+  gap: 8px;
+  margin: 0;
+  padding-left: 2px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
   color: var(--text-3);
-  text-decoration: none;
-  transition: color 160ms var(--ease);
+  white-space: nowrap;
 }
+.footer-legal a { transition: color 160ms var(--ease); }
 .footer-legal a:hover { color: var(--text); }
-.footer-legal span { color: var(--text-3); opacity: 0.6; }
+.footer-legal span[aria-hidden] { opacity: 0.6; }
+.footer-social { display: flex; }
+
+/* ── Short phones (iPhone SE, Instagram/TikTok in-app browsers) ──
+   Trim chrome so the video frame keeps a usable size. */
+@media (max-height: 640px) {
+  .topbar, .footer { height: 36px; }
+  .banner-clad { padding: 16px 18px; }
+  .clad-body { margin-top: 6px; }
+  .clad-cta { padding: 10px 16px; font-size: 14px; }
+  .btn-primary { height: 44px; }
+  .video-link { gap: 8px; }
+}
 
 /* ── Reduced motion ────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
@@ -751,6 +588,7 @@ body {
 /* ── Print ─────────────────────────────────────────────── */
 @media print {
   body { background: #fff; color: #000; }
+  .page { height: auto; }
   .btn-primary { background: #000; color: #fff; }
   .banner-clad { border: 1px solid #000; }
   .topbar { display: none; }
