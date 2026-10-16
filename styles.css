@@ -369,6 +369,50 @@ body {
 [data-theme="light"] .banner-clad { border-color: transparent; }
 .banner-clad:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Badge, from the letsclad.com hero (.hero-pill): ink pill, paper text,
+   lime dot. Small phones get letsclad's own two-line break; once the banner
+   is wide enough it sets on one line, its size scaled to the box so it can't
+   overflow (Safari sets type a hair wider than Chrome). */
+.clad-pill {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 4px 11px 4px 9px;
+  border-radius: 14px;
+  background: var(--clad-ink);
+  color: var(--clad-paper);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 11.5px;
+  line-height: 1.4;
+  letter-spacing: -0.005em;
+}
+.clad-pill-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: var(--clad-lime);
+  vertical-align: 0.08em;
+}
+.clad-nowrap { white-space: nowrap; }
+/* One line from ~390px phones up. The copy measures 24.5em; 34px is the
+   pill's padding + dot. */
+@container (min-width: 316px) {
+  .clad-pill {
+    border-radius: 999px;
+    line-height: 1.2;
+    white-space: nowrap;
+    font-size: min(11.5px, calc((100cqi - 34px) / 24.8));
+  }
+  .clad-pill-br { display: none; }
+}
+/* Roomy banners (big phones, desktop): letsclad's full-size pill */
+@container (min-width: 380px) {
+  .clad-pill { font-size: 12.5px; padding: 6px 15px 6px 13px; }
+  .clad-pill-dot { width: 8px; height: 8px; margin-right: 8px; }
+}
+
 .clad-headline {
   margin: 0;
   font-family: var(--font-display);
@@ -614,12 +658,17 @@ body {
 
 /* ── Short phones (iPhone SE, Instagram/TikTok in-app browsers) ──
    Trim chrome so the video frame keeps a usable size. */
-@media (max-height: 640px) {
+/* Most phones in a browser (≤760px tall): trim the bars and pills a few px
+   so the badge's height comes out of chrome, not out of the video. */
+@media (max-height: 760px) {
   .topbar { height: 44px; }
+  .btn-primary { height: 44px; }
   .footer { height: 36px; }
+}
+
+@media (max-height: 640px) {
   .banner-clad { padding: 16px; }
   .clad-body { margin-top: 10px; }
-  .btn-primary { height: 44px; }
   .video-link { gap: 8px; }
 }
 
