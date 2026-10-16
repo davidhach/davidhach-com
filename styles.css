@@ -397,7 +397,7 @@ body {
   background: var(--clad-lime);
 }
 .clad-body {
-  margin: 12px 0 20px;
+  margin: 12px 0 0;
   font-family: var(--font-body);
   /* Scales with the box like the headline, holding a ~1.4–1.5 size ratio so
      the headline leads on size as well as weight. */
@@ -415,28 +415,10 @@ body {
   hyphens: auto;
   hyphenate-limit-chars: 7 3 3; /* no stubby splits like "a-" or "-ly" */
   text-wrap: pretty;
+  /* Last thing in the card: trim to the baseline so the bottom inset matches
+     the trimmed top (headline caps) and the 20px sides. */
+  text-box: trim-end cap alphabetic;
 }
-.clad-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--clad-ink);
-  background: var(--clad-lime);
-  border: 1.5px solid var(--clad-ink);
-  border-radius: 8px;
-  padding: 11px 18px;
-  /* The 4px offset shadow puts the button's visual mass 2px right of its
-     box; a 4px right margin shifts the box 2px left so it reads as centred. */
-  margin-right: 4px;
-  box-shadow: 4px 4px 0 0 var(--clad-ink);
-  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
-}
-.banner-clad:hover .clad-cta { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 0 var(--clad-ink); }
-.banner-clad:active .clad-cta { transform: translate(2px, 2px); box-shadow: 2px 2px 0 0 var(--clad-ink); }
 
 /* ── Latest video ──────────────────────────────────────── */
 .video {
@@ -589,6 +571,18 @@ body {
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary:focus-visible { outline: 2px solid var(--cta-focus-ring); outline-offset: 2px; }
 
+/* Explore CLAD: identical shape to Subscribe, CLAD lime on ink. Lime is
+   brand-fixed, so it doesn't change with the theme. Hover darkens with an
+   ink veil rather than a new tint — CLAD allows no colours beyond its five. */
+.btn-clad {
+  background: var(--clad-lime);
+  color: var(--clad-ink);
+}
+.btn-clad:hover {
+  background: var(--clad-lime);
+  background-image: linear-gradient(rgba(15, 15, 14, 0.08), rgba(15, 15, 14, 0.08));
+}
+
 /* ── Footer: legal left, socials right, one row ────────── */
 .footer {
   flex: none;
@@ -621,8 +615,7 @@ body {
   .topbar { height: 44px; }
   .footer { height: 36px; }
   .banner-clad { padding: 16px; }
-  .clad-body { margin: 10px 0 16px; }
-  .clad-cta { padding: 10px 16px; font-size: 14px; }
+  .clad-body { margin-top: 10px; }
   .btn-primary { height: 44px; }
   .video-link { gap: 8px; }
 }
@@ -640,6 +633,7 @@ body {
   body { background: #fff; color: #000; }
   .page { height: auto; }
   .btn-primary { background: #000; color: #fff; }
+  .btn-clad { background: #fff; color: #000; border: 1px solid #000; }
   .banner-clad { border: 1px solid #000; }
   .topbar { display: none; }
 }
