@@ -247,9 +247,10 @@ body {
   display: flex;
   justify-content: center;
   padding:
-    max(12px, env(safe-area-inset-top))
+    env(safe-area-inset-top, 0px)   /* the nav bar owns the top edge */
     var(--gutter)
     max(8px, env(safe-area-inset-bottom));
+  overflow-x: clip; /* the nav bar's full-bleed band reaches past the column */
 }
 
 .stack {
@@ -271,11 +272,10 @@ body {
   gap: var(--gap);
 }
 
-/* Desktop: a phone-width column stretched to a 900px-tall window reads as
-   empty. Collapse to natural height and centre the whole column instead. */
+/* Desktop: same structure as mobile (bar on top, content centred, footer at
+   the bottom), with a roomier rhythm. */
 @media (min-width: 720px) and (min-height: 760px) {
-  .page { align-items: center; }
-  .stack { height: auto; gap: 16px; }
+  .stack { gap: 16px; }
   .content { gap: 16px; }
 }
 
@@ -301,13 +301,30 @@ body {
 .icon-btn:hover { color: var(--text); background: var(--surface); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ── Top bar: the tagline, on the page's centre axis ───── */
+/* ── Nav bar: the tagline on a tinted full-width band ──── */
 .topbar {
   flex: none;
-  height: 40px;
+  height: 48px;
+  margin-bottom: 4px; /* a little air below the bar's edge */
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  isolation: isolate;
+}
+/* The band: full viewport width, up under the status bar on notched phones,
+   one surface step off the page ground with a hairline edge. The meta
+   theme-color in <head> matches it so the browser chrome continues the bar. */
+.topbar::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: calc(-1 * env(safe-area-inset-top, 0px));
+  bottom: 0;
+  left: calc(50% - 50vw);
+  right: calc(50% - 50vw);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .tagline {
@@ -601,7 +618,8 @@ body {
 /* ── Short phones (iPhone SE, Instagram/TikTok in-app browsers) ──
    Trim chrome so the video frame keeps a usable size. */
 @media (max-height: 640px) {
-  .topbar, .footer { height: 36px; }
+  .topbar { height: 44px; }
+  .footer { height: 36px; }
   .banner-clad { padding: 16px; }
   .clad-body { margin: 10px 0 16px; }
   .clad-cta { padding: 10px 16px; font-size: 14px; }
