@@ -305,12 +305,18 @@ body {
 .topbar {
   flex: none;
   height: 40px;
-  display: flex;
-  justify-content: space-between;
+  /* Tagline on the page's centre axis: an empty 40px column on the left
+     mirrors the 40px toggle on the right, so the middle column is centred. */
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: center;
-  gap: 12px;
-  margin-right: -8px; /* optically align the toggle's glyph with the column edge */
+  gap: 4px;
+  /* Pull out 8px on both sides: the toggle's glyph aligns with the column
+     edge, and staying symmetric keeps the centre where it was. */
+  margin: 0 -8px;
 }
+.topbar .tagline { grid-column: 2; text-align: center; }
+.topbar .theme-toggle { grid-column: 3; }
 
 .tagline {
   margin: 0;
