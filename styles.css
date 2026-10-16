@@ -337,7 +337,11 @@ body {
   background: var(--clad-ground);
   border: 1px solid var(--border);       /* only adaptive property: defines the edge on #0A0A0A */
   border-radius: 16px;
-  padding: clamp(16px, 2.5dvh, 24px) 20px;
+  padding: 20px;               /* one inset on all four sides */
+  container-type: inline-size; /* the headline sizes itself to this box */
+}
+@media (min-width: 720px) {
+  .banner-clad { padding: 24px; }
 }
 /* On the light ground the card already separates itself; a light hairline
    would ring the dark green with a halo, so drop it. */
@@ -348,11 +352,20 @@ body {
   margin: 0;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(20px, calc(2.6dvh + 4px), 24px);
-  line-height: 1.08;
-  letter-spacing: -0.022em;
+  /* Always two lines, at the largest size that fits. The widest balanced
+     line ("Turn what you offer into a meaningful") measures 16.86em in
+     Instrument Sans 700, so size = box width / 17.4 (3% slack for rounding
+     and font hinting). ~18px on a phone, ~22px in the desktop column. If the
+     copy changes, re-measure the widest line and update the divisor. */
+  font-size: 21px; /* no container-query support */
+  font-size: clamp(16px, 100cqi / 17.4, 26px);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
   color: var(--clad-paper);
   text-wrap: balance;
+  /* Trim the line box to cap height / baseline so the 20px padding above
+     the headline reads the same as the 20px at the sides. */
+  text-box: trim-both cap alphabetic;
 }
 .clad-keep { white-space: nowrap; }
 .clad-dot {
@@ -363,9 +376,12 @@ body {
   background: var(--clad-lime);
 }
 .clad-body {
-  margin: 8px 0 clamp(12px, 2dvh, 18px);
+  margin: 12px 0 20px;
   font-family: var(--font-body);
-  font-size: clamp(13px, calc(1.2dvh + 6px), 15px);
+  /* Scales with the box like the headline, holding a ~1.4–1.5 size ratio so
+     the headline leads on size as well as weight. */
+  font-size: 14px; /* no container-query support */
+  font-size: clamp(13px, 100cqi / 24.5, 14.5px);
   line-height: 1.45;
   color: rgba(250, 250, 247, 0.72);      /* Paper at opacity — CLAD's "no greys" rule */
   text-wrap: pretty;
@@ -570,8 +586,8 @@ body {
    Trim chrome so the video frame keeps a usable size. */
 @media (max-height: 640px) {
   .topbar, .footer { height: 36px; }
-  .banner-clad { padding: 16px 18px; }
-  .clad-body { margin-top: 6px; }
+  .banner-clad { padding: 16px; }
+  .clad-body { margin: 10px 0 16px; }
   .clad-cta { padding: 10px 16px; font-size: 14px; }
   .btn-primary { height: 44px; }
   .video-link { gap: 8px; }
