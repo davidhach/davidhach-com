@@ -35,19 +35,14 @@
   <link rel="preload" href="/api/latest-video" as="fetch" crossorigin />
   <link rel="stylesheet" href="./styles.css" />
 
-  <!-- Theme hydration: runs before paint to avoid FOUC -->
+  <!-- Theme follows the system setting. Runs before paint to avoid a flash. -->
   <script>
     (function () {
-      try {
-        var stored = localStorage.getItem("dh_theme");
-        var prefersLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
-        var theme = stored === "light" || stored === "dark"
-          ? stored
-          : (prefersLight ? "light" : "dark");
-        document.documentElement.setAttribute("data-theme", theme);
-      } catch (_) {
-        document.documentElement.setAttribute("data-theme", "dark");
-      }
+      var light = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+      document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
+      // A choice saved by the old manual toggle would otherwise pin visitors
+      // to it forever now that there's no button to change it.
+      try { localStorage.removeItem("dh_theme"); } catch (_) {}
     })();
   </script>
 </head>
@@ -62,17 +57,6 @@
 
       <header class="topbar">
         <p class="tagline">Building epic things with epic people.</p>
-        <button type="button" id="theme-toggle" class="icon-btn theme-toggle" aria-label="Toggle color theme" title="Toggle theme">
-          <!-- Sun (visible in dark mode → click to go light) -->
-          <svg class="icon icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-          </svg>
-          <!-- Moon (visible in light mode → click to go dark) -->
-          <svg class="icon icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79Z" />
-          </svg>
-        </button>
       </header>
 
       <div class="content">

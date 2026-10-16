@@ -286,7 +286,7 @@ body {
   .stack { height: auto; }
 }
 
-/* ── Shared icon button (theme toggle, socials) ───────── */
+/* ── Shared icon button (footer socials) ───────────────── */
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -301,22 +301,14 @@ body {
 .icon-btn:hover { color: var(--text); background: var(--surface); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ── Top bar (tagline + theme toggle) ──────────────────── */
+/* ── Top bar: the tagline, on the page's centre axis ───── */
 .topbar {
   flex: none;
   height: 40px;
-  /* Tagline on the page's centre axis: an empty 40px column on the left
-     mirrors the 40px toggle on the right, so the middle column is centred. */
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  display: flex;
   align-items: center;
-  gap: 4px;
-  /* Pull out 8px on both sides: the toggle's glyph aligns with the column
-     edge, and staying symmetric keeps the centre where it was. */
-  margin: 0 -8px;
+  justify-content: center;
 }
-.topbar .tagline { grid-column: 2; text-align: center; }
-.topbar .theme-toggle { grid-column: 3; }
 
 .tagline {
   margin: 0;
@@ -326,15 +318,12 @@ body {
   letter-spacing: -0.005em;
   line-height: 1.3;
   color: var(--text-2);
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
-
-.theme-toggle .icon { display: none; }
-[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
-[data-theme="light"] .theme-toggle .icon-moon { display: block; }
 
 /* ── CLAD banner (brand-fixed; does not respond to theme) ─ */
 /* Labelled exactly like the video section: shared .eyebrow above the block */

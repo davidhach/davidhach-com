@@ -1,46 +1,21 @@
 /* David Hach — link-in-bio
- * - Theme toggle (light/dark) with system preference + localStorage persistence.
+ * - Theme follows the system light/dark setting.
  * - Latest YouTube video via /api/latest-video (Vercel serverless).
  */
 (() => {
   "use strict";
 
   /* ────────────────────────────────────────────────────────
-   * Theme toggle
-   * Hydration runs early in <head>; this just wires the click.
+   * Theme follows the system setting
+   * The <head> script sets it before paint; this keeps it in sync if the
+   * visitor's system switches while the page is open (e.g. auto at sunset).
    * ──────────────────────────────────────────────────────── */
-  const root = document.documentElement;
-  const toggle = document.getElementById("theme-toggle");
-
-  const setTheme = (theme, persist) => {
-    root.setAttribute("data-theme", theme);
-    if (persist) {
-      try { localStorage.setItem("dh_theme", theme); } catch (_) {}
-    }
-    // Update the meta theme-color hint for mobile browser chrome
-    const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-    if (meta) meta.setAttribute("content", theme === "light" ? "#FAFAF9" : "#0A0A0A");
-  };
-
-  if (toggle) {
-    toggle.addEventListener("click", () => {
-      const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
-      setTheme(next, true);
-    });
-  }
-
-  // Follow system changes only when user hasn't picked one
   if (window.matchMedia) {
     const mql = window.matchMedia("(prefers-color-scheme: light)");
-    const onChange = (e) => {
-      let stored = null;
-      try { stored = localStorage.getItem("dh_theme"); } catch (_) {}
-      if (stored !== "light" && stored !== "dark") {
-        setTheme(e.matches ? "light" : "dark", false);
-      }
-    };
-    if (typeof mql.addEventListener === "function") mql.addEventListener("change", onChange);
-    else if (typeof mql.addListener === "function") mql.addListener(onChange);
+    const sync = (e) =>
+      document.documentElement.setAttribute("data-theme", e.matches ? "light" : "dark");
+    if (typeof mql.addEventListener === "function") mql.addEventListener("change", sync);
+    else if (typeof mql.addListener === "function") mql.addListener(sync);
   }
 
   /* ────────────────────────────────────────────────────────

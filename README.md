@@ -16,7 +16,7 @@ serverless function that pulls the latest YouTube video. Zero build step.
 code/
 ├── index.html             # The page
 ├── styles.css             # Tokens + layout (dark/light scoped via [data-theme])
-├── script.js              # Theme toggle + latest-video fetch
+├── script.js              # System theme sync + latest-video fetch
 ├── favicon.svg            # DH monogram (also inlined in <head>)
 ├── robots.txt
 ├── sitemap.xml
@@ -51,11 +51,9 @@ That's it. Vercel auto-detects `api/latest-video.js` as a serverless function an
 - Uses the `mqdefault.jpg` thumbnail (native 16:9, no letterboxing).
 - Channel ID is hard-coded at the top of `api/latest-video.js`. If you ever change handles, update there.
 
-### Theme toggle
-- Top-right icon. Sun = "you're in dark mode, click for light." Moon = vice-versa.
-- On first load: respects `prefers-color-scheme` from the OS.
-- After a manual choice: saved to `localStorage` and respected on every subsequent visit.
-- Hydration runs in `<head>` before paint — no flash of wrong theme.
+### Theme (follows the system)
+- No toggle: the page follows the visitor's system light/dark setting, set in `<head>` before paint (no flash) and kept in sync live if the system switches while the page is open.
+- The old toggle saved a manual choice under `localStorage.dh_theme`; the page now ignores and deletes it so nobody stays pinned to a stale choice.
 - Brand-correct: the page is monochrome in both modes. `--accent` is off-white in dark mode and near-black in light mode — i.e. the accent *is* the primary text color either way, so hierarchy is structural, never chromatic (per `brand-identity.md`). The Subscribe CTA is a filled block of that accent rather than a hue.
 
 ### One screen, no scroll
