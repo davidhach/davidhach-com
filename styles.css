@@ -347,6 +347,7 @@ body {
   border-radius: 16px;
   padding: 20px;               /* one inset on all four sides */
   container-type: inline-size; /* the headline sizes itself to this box */
+  text-align: center;          /* one centred axis, like the labels and video title */
 }
 @media (min-width: 720px) {
   .banner-clad { padding: 24px; }
@@ -397,6 +398,7 @@ body {
      60-90% depending on width; hyphenation (needs <html lang>) recovers
      some of that whenever a longer word lands at a line end. */
   text-align: justify;
+  text-align-last: center; /* keeps the block, centres the short last line */
   -webkit-hyphens: auto;
   hyphens: auto;
   hyphenate-limit-chars: 7 3 3; /* no stubby splits like "a-" or "-ly" */
@@ -415,6 +417,9 @@ body {
   border: 1.5px solid var(--clad-ink);
   border-radius: 8px;
   padding: 11px 18px;
+  /* The 4px offset shadow puts the button's visual mass 2px right of its
+     box; a 4px right margin shifts the box 2px left so it reads as centred. */
+  margin-right: 4px;
   box-shadow: 4px 4px 0 0 var(--clad-ink);
   transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
 }
